@@ -8,15 +8,13 @@ import CaptainContext from './context/CapatainContext.jsx';
 import SocketProvider from './context/SocketContext.jsx';
 
 createRoot(document.getElementById('root')).render(
-
   <CaptainContext>
     <UserContext>
       <SocketProvider>
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true }}>
           <App />
         </BrowserRouter>
       </SocketProvider>
     </UserContext>
   </CaptainContext>
-
 )

@@ -10,7 +10,7 @@ const SocketProvider = ({ children }) => {
     useEffect(() => {
         // Basic connection logic
         socket.on('connect', () => {
-            console.log('Connected to server');
+            console.log(`Client connected: ${socket.id}`);
         });
 
         socket.on('disconnect', () => {
