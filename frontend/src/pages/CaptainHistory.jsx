@@ -1,35 +1,22 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Clock } from 'lucide-react'
+import axios from 'axios'
 
 const CaptainHistory = () => {
-    // Mock Data
-    const history = [
-        {
-            id: 1,
-            date: 'Today, 11:30 AM',
-            earnings: '₹240.50',
-            pickup: 'Cannaught Place',
-            drop: 'Cyber Hub, Gurgaon',
-            status: 'Completed'
-        },
-        {
-            id: 2,
-            date: 'Yesterday, 06:15 PM',
-            earnings: '₹180.00',
-            pickup: 'Vasant Kunj',
-            drop: 'Saket Metro',
-            status: 'Completed'
-        },
-        {
-            id: 3,
-            date: 'Yesterday, 04:00 PM',
-            earnings: '₹95.00',
-            pickup: 'JNU Main Gate',
-            drop: 'Munirka',
-            status: 'Completed'
-        }
-    ]
+    const [history, setHistory] = useState([])
+
+    useEffect(() => {
+        axios.get(`${import.meta.env.VITE_BASE_URL}/captains/history`, {
+            headers: {
+                Authorization: `Bearer ${localStorage.getItem('token')}`
+            }
+        }).then(response => {
+            setHistory(response.data)
+        }).catch(err => {
+            console.error(err)
+        })
+    }, [])
 
     return (
         <div className='h-screen bg-dark-bg text-white overflow-hidden flex flex-col'>
@@ -41,16 +28,17 @@ const CaptainHistory = () => {
             </div>
 
             <div className='p-4 overflow-y-auto flex-1'>
+                {history.length === 0 && <p className='text-center text-zinc-500 mt-10'>No ride history found</p>}
                 {history.map(ride => (
-                    <div key={ride.id} className='mb-4 bg-zinc-900 border border-zinc-800 p-4 rounded-xl active:scale-95 transition-transform'>
+                    <div key={ride._id} className='mb-4 bg-zinc-900 border border-zinc-800 p-4 rounded-xl active:scale-95 transition-transform'>
                         <div className='flex justify-between items-center mb-4'>
                             <div className='flex items-center gap-2'>
                                 <div className='bg-lime-500/20 p-1 rounded'>
                                     <Clock size={14} className="text-lime-400" />
                                 </div>
-                                <span className='text-xs font-medium text-zinc-400'>{ride.date}</span>
+                                <span className='text-xs font-medium text-zinc-400'>{new Date(ride.createdAt).toLocaleString()}</span>
                             </div>
-                            <span className='font-bold text-lg text-lime-400'>{ride.earnings}</span>
+                            <span className='font-bold text-lg text-lime-400'>₹{ride.fare}</span>
                         </div>
 
                         <div className='flex flex-col gap-4 relative pl-4 border-l border-zinc-800 ml-1'>
@@ -60,7 +48,7 @@ const CaptainHistory = () => {
                             </div>
                             <div>
                                 <h4 className='font-bold text-sm text-zinc-300'>Drop-off</h4>
-                                <p className='text-xs text-zinc-500 truncate'>{ride.drop}</p>
+                                <p className='text-xs text-zinc-500 truncate'>{ride.destination}</p>
                             </div>
                         </div>
                     </div>

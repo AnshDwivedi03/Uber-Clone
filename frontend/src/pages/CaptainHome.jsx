@@ -1,19 +1,31 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { CaptainDataContext } from '../context/CaptainContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import LivingMap from '../components/LivingMap';
 import Button from '../components/ui/Button';
 import { Power, MapPin, DollarSign, Clock, Menu, User, CreditCard, LogOut, Car } from 'lucide-react';
 import BiddingPanel from '../components/BiddingPanel';
 import LiveTracking from '../components/LiveTracking';
+import ConfirmRidePopUp from '../components/ConfirmRidePopUp';
 
 const CaptainHome = () => {
     const [isOnline, setIsOnline] = useState(false);
     const [rideRequest, setRideRequest] = useState(null);
+    const [confirmRidePopupPanel, setConfirmRidePopupPanel] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const { socket } = useSocket();
+    
+    // Fix: Ensure useSocket is called to get socket instance
+    const { socket, joinIdentity } = useSocket();
     const { captain } = useContext(CaptainDataContext);
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (captain && socket) {
+            console.log("Captain emitting join for:", captain._id);
+            joinIdentity(captain._id, 'captain');
+        }
+    }, [captain, socket]);
 
     // Mock Earnings
     const [earnings, setEarnings] = useState(1250); // Today's earnings
@@ -25,25 +37,36 @@ const CaptainHome = () => {
         }
     };
 
-    // Mock Location Updates when Online
+    // Location Updates when Online
     useEffect(() => {
-        if (!isOnline || !socket) return;
+        if (!isOnline || !socket || !captain) return;
 
-        const interval = setInterval(() => {
-            // Simulate movement for demo
-            const mockLat = 28.7041 + (Math.random() - 0.5) * 0.01;
-            const mockLng = 77.1025 + (Math.random() - 0.5) * 0.01;
+        console.log("Captain coming online, starting watchPosition");
 
-            socket.emit('update-location-captain', {
-                userId: captain?._id,
-                location: { ltd: mockLat, lng: mockLng }
+        const updateLocation = (position) => {
+             const { latitude, longitude } = position.coords;
+             console.log("Captain Location:", latitude, longitude);
+             
+             socket.emit('update-location-captain', {
+                userId: captain._id,
+                location: { ltd: latitude, lng: longitude }
             });
-        }, 10000);
+        };
 
-        return () => clearInterval(interval);
+        const errorLocation = (error) => {
+            console.error("Geolocation Error:", error);
+        };
+
+        const watchId = navigator.geolocation.watchPosition(updateLocation, errorLocation, {
+            enableHighAccuracy: true,
+            timeout: 30000,
+            maximumAge: 0
+        });
+
+        return () => navigator.geolocation.clearWatch(watchId);
     }, [isOnline, socket, captain]);
 
-    // Listen for Ride Requests
+    // Listen for Ride Requests & Confirmation
     useEffect(() => {
         if (!socket) return;
 
@@ -51,22 +74,45 @@ const CaptainHome = () => {
             setRideRequest(data);
         });
 
+        socket.on('ride-confirmed', (data) => {
+             console.log("Ride Confirmed by User:", data);
+             setRideRequest(null); // Hide request panel
+             setRideRequest(data); // Ensure data availability for popup (though duplicate set, purely for clarity)
+             setConfirmRidePopupPanel(true); // Show OTP Popup
+        });
+
         return () => {
-            socket.off('new-ride');
+             socket.off('new-ride');
+             socket.off('ride-confirmed');
         };
     }, [socket]);
 
     const acceptRide = () => {
-        // socket.emit('accept-ride', ...);
-        console.log('Accepted Ride');
-        setRideRequest(null);
-        // Navigate or show ride in progress? 
-        // For now, accept logic usually happens inside BiddingPanel or triggers a redirect
+        if (!socket || !rideRequest || !captain) return;
+
+        const data = {
+            rideId: rideRequest._id,
+            riderId: rideRequest.user._id,
+            captainId: captain._id
+        };
+
+        socket.emit('captain-accept-ride', data);
+        console.log('Accepted Ride, emitting:', data);
     };
 
     const counterOffer = (amount) => {
-        // socket.emit('make-bid', ...);
-        console.log('Counter Bid:', amount);
+        if (!socket || !rideRequest || !captain) return;
+
+        const data = {
+            rideId: rideRequest._id,
+            riderId: rideRequest.user._id,
+            captainId: captain._id,
+            amount: amount,
+            captainDetails: captain // Sending full profile for Rider UI
+        };
+
+        socket.emit('make-bid', data);
+        console.log('Counter Bid, emitting:', data);
     };
 
     return (
@@ -77,7 +123,6 @@ const CaptainHome = () => {
                 />
             </div>
 
-            {/* Header */}
             {/* Header */}
             <div className="absolute top-0 left-0 w-full z-20 p-4 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
                 {/* Sidebar Toggle */}
@@ -146,12 +191,11 @@ const CaptainHome = () => {
 
             {/* Map Area */}
             <div className="flex-1 relative z-0">
-                {/* Use LiveTracking for Captain too - shows current loc */}
                 <LiveTracking />
             </div>
 
             {/* Dashboard Panel */}
-            <div className={`h-2/5 bg-dark-card border-t-2 ${isOnline ? 'border-lime-500' : 'border-zinc-800'} rounded-t-3xl p-6 relative z-10 transition-colors duration-500 shadow-2xl`}>
+            <div className={`${rideRequest ? 'h-3/5' : 'h-2/5'} bg-dark-card border-t-2 ${isOnline ? 'border-lime-500' : 'border-zinc-800'} rounded-t-3xl p-6 relative z-10 transition-all duration-500 shadow-2xl`}>
 
                 {!rideRequest ? (
                     <>
@@ -189,8 +233,8 @@ const CaptainHome = () => {
                         </div>
                     </>
                 ) : (
-                    /* Ride Request Pop-Up */
-                    <div className="absolute inset-0 bg-dark-card rounded-t-3xl border-t border-brand-primary z-50 p-6 animate-slide-up">
+                    /* Ride Request Pop-Up with BiddingPanel */
+                    <div className="absolute inset-0 bg-dark-card rounded-t-3xl border-t border-brand-primary z-50 p-6 animate-slide-up overflow-y-auto">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold text-white">New Ride Request</h3>
                             <span className="bg-lime-500 text-black text-xs font-bold px-2 py-1 rounded">
@@ -201,11 +245,11 @@ const CaptainHome = () => {
                         <div className="flex flex-col gap-4 mb-4">
                             <div className="flex items-center gap-3">
                                 <div className="w-2 h-2 rounded-full bg-lime-500" />
-                                <p className="text-sm text-zinc-300">{rideRequest.pickup.address || 'Pickup Location'}</p>
+                                <p className="text-sm text-zinc-300">{typeof rideRequest.pickup === 'string' ? rideRequest.pickup : rideRequest.pickup.address}</p>
                             </div>
                             <div className="flex items-center gap-3">
                                 <div className="w-2 h-2 rounded-full bg-white" />
-                                <p className="text-sm text-zinc-300">{rideRequest.drop.address || 'Drop Location'}</p>
+                                <p className="text-sm text-zinc-300">{typeof rideRequest.drop === 'string' ? rideRequest.drop : rideRequest.drop.address}</p>
                             </div>
                         </div>
 
@@ -219,6 +263,17 @@ const CaptainHome = () => {
                     </div>
                 )}
             </div>
+
+            {/* Confirm Ride Pop-Up (OTP) */}
+            {confirmRidePopupPanel && (
+                <div className="fixed w-full z-50 bottom-0 translate-y-0 bg-dark-card border-t border-brand-primary p-6 rounded-t-3xl shadow-2xl transition-transform duration-300 h-screen">
+                    <ConfirmRidePopUp
+                        ride={rideRequest}
+                        setConfirmRidePopupPanel={setConfirmRidePopupPanel}
+                        setRidePopupPanel={() => {}} // No-op since we handle panel via state
+                    />
+                </div>
+            )}
         </div>
     );
 };

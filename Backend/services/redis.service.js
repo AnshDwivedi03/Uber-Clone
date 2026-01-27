@@ -17,21 +17,22 @@ const connectToRedis = async () => {
 
 const updateCaptainLocation = async (captainId, lat, lng) => {
     if (!redisClient) await connectToRedis();
-    // GEOADD key longitude latitude member
+    console.log(`Redis: Updating location for ${captainId} at ${lat}, ${lng}`);
     await redisClient.geoAdd('active-captains', {
         longitude: lng,
         latitude: lat,
         member: captainId.toString()
     });
-    // Set expiry for safety (e.g., 1 hour if no update) - specialized logic may be needed
-    // but geo keys are single zset, so we can't expire individual members easily.
-    // Instead we rely on 'remove' when offline.
 };
 
 const getCaptainsNearby = async (lat, lng, radiusKm = 5) => {
     if (!redisClient) await connectToRedis();
-    // GEORADIUS key longitude latitude radius unit
-    // In newer Redis versions, use geoSearch
+    console.log(`Redis: Searching nearby captains at ${lat}, ${lng} radius ${radiusKm}km`);
+    
+    // Debug: Check if any captains exist
+    // const count = await redisClient.zCard('active-captains');
+    // console.log(`Redis: Total active captains: ${count}`);
+
     const results = await redisClient.geoSearch('active-captains', {
         longitude: lng,
         latitude: lat
@@ -41,6 +42,7 @@ const getCaptainsNearby = async (lat, lng, radiusKm = 5) => {
     }, {
         SORT: 'ASC' // Nearest first
     });
+    console.log(`Redis: Search results:`, results);
     return results; // Returns array of captainIds
 };
 
@@ -49,10 +51,26 @@ const removeCaptainLocation = async (captainId) => {
     await redisClient.zRem('active-captains', captainId.toString());
 };
 
+// Generic Cache Methods
+const set = async (key, value, ttlSeconds = 3600) => {
+    if (!redisClient) await connectToRedis();
+    await redisClient.set(key, JSON.stringify(value), {
+        EX: ttlSeconds
+    });
+};
+
+const get = async (key) => {
+    if (!redisClient) await connectToRedis();
+    const data = await redisClient.get(key);
+    return data ? JSON.parse(data) : null;
+};
+
 module.exports = {
     connectToRedis,
     updateCaptainLocation,
     getCaptainsNearby,
     removeCaptainLocation,
+    set,
+    get,
     redisClient // Export if raw access needed
 };

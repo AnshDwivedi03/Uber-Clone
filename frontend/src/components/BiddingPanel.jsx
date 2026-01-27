@@ -3,7 +3,8 @@ import { Minus, Plus, Check, X } from 'lucide-react';
 import Button from './ui/Button';
 
 const BiddingPanel = ({ ride, userType, onAccept, onReject, onCounter }) => {
-    const [bidAmount, setBidAmount] = useState(ride?.fare || 0);
+    const fareValue = typeof ride?.fare === 'object' ? ride?.fare?.initialBid : ride?.fare;
+    const [bidAmount, setBidAmount] = useState(fareValue || 0);
 
     const adjustBid = (amount) => {
         setBidAmount(prev => Math.max(0, prev + amount));

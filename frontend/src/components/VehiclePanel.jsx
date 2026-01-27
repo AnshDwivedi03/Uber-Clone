@@ -30,50 +30,7 @@ const VehiclePanel = (props) => {
 
             <h3 className='text-2xl font-bold mb-4 mt-6 px-1'>Choose your Ride</h3>
 
-            {/* Bidding Section - Highlighted & Premium */}
-            <div className={`mb-6 p-4 rounded-xl border transition-all duration-300 ${isBidding ? 'border-brand-primary bg-gradient-to-br from-brand-primary/20 to-transparent shadow-[0_0_15px_rgba(255,215,0,0.1)]' : 'border-gray-700 bg-dark-surface/40'}`}>
-                <div className="flex items-center justify-between mb-3 cursor-pointer" onClick={() => setIsBidding(!isBidding)}>
-                    <div>
-                        <h4 className="font-bold text-lg text-white">Bid Your Price</h4>
-                        <p className="text-xs text-brand-primary">Save more by offering your own fare</p>
-                    </div>
 
-                    <div className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${isBidding ? 'bg-brand-primary' : 'bg-gray-600'}`}>
-                        <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${isBidding ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                    </div>
-                </div>
-
-                {isBidding && (
-                    <div className="animate-fade-in mt-3 border-t border-gray-600/50 pt-3">
-                        <div className="mb-2 flex justify-between items-center px-1">
-                            <span className="text-sm text-gray-400">Your Offer</span>
-                            <span className="text-xs text-gray-500">Recommended: ₹{recommendedPrice}</span>
-                        </div>
-                        <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₹</span>
-                            <input
-                                type="number"
-                                placeholder="Enter amount"
-                                value={props.bidFare}
-                                onChange={onBidChange}
-                                className="bg-dark-bg/80 border border-gray-600 rounded-lg w-full py-3 pl-8 pr-3 text-white focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none transition-all font-bold text-lg"
-                            />
-                        </div>
-                        <p className="text-[10px] text-gray-500 mt-2 italic text-center">Average fares are around ₹{recommendedPrice}. Offers below ₹{Math.floor(recommendedPrice * 0.8)} may take longer to accept.</p>
-
-                        <button
-                            onClick={() => {
-                                props.setConfirmRidePanel(true);
-                                props.selectVehicle('car'); // Default to Mini/Car for custom bids
-                            }}
-                            className="w-full mt-3 bg-brand-primary text-black font-bold py-3 rounded-lg hover:bg-yellow-400 transition-all shadow-lg text-lg flex justify-center items-center"
-                        >
-                            <span className="mr-2">Book Ride</span>
-                            <i className="ri-arrow-right-line"></i>
-                        </button>
-                    </div>
-                )}
-            </div>
 
             {/* Vehicle List */}
             <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar">
@@ -136,6 +93,31 @@ const VehiclePanel = (props) => {
                         <h2 className='text-xl font-bold text-white'>₹{props.fare.auto}</h2>
                         <h5 className='font-medium text-xs text-brand-primary'>3 min</h5>
                     </div>
+                </div>
+            </div>
+
+            {/* Vibe Selection */}
+            <div className="mt-4 px-1 pb-4">
+                <h4 className="font-bold text-white mb-2 text-sm uppercase tracking-wider text-gray-400">Ride Vibe</h4>
+                <div className="grid grid-cols-3 gap-2">
+                    <button 
+                        onClick={() => props.setVibe(prev => ({ ...prev, techno: !prev.techno }))}
+                        className={`p-2 rounded-lg border text-xs font-bold transition-all ${props.vibe?.techno ? 'bg-brand-primary text-black border-brand-primary' : 'bg-dark-surface text-gray-400 border-zinc-700'}`}
+                    >
+                        Techno Lover
+                    </button>
+                    <button 
+                         onClick={() => props.setVibe(prev => ({ ...prev, ac: !prev.ac }))}
+                         className={`p-2 rounded-lg border text-xs font-bold transition-all ${props.vibe?.ac ? 'bg-brand-primary text-black border-brand-primary' : 'bg-dark-surface text-gray-400 border-zinc-700'}`}
+                    >
+                        AC Max
+                    </button>
+                    <button 
+                         onClick={() => props.setVibe(prev => ({ ...prev, quiet: !prev.quiet }))}
+                         className={`p-2 rounded-lg border text-xs font-bold transition-all ${props.vibe?.quiet ? 'bg-brand-primary text-black border-brand-primary' : 'bg-dark-surface text-gray-400 border-zinc-700'}`}
+                    >
+                        Quiet Ride
+                    </button>
                 </div>
             </div>
         </div>

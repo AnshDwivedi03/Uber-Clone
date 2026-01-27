@@ -35,7 +35,7 @@ const rideSchema = new mongoose.Schema({
         currency: { type: String, default: 'INR' }
     },
     vibe: {
-        music: { type: Boolean, default: false },
+        techno: { type: Boolean, default: false },
         quiet: { type: Boolean, default: false },
         ac: { type: Boolean, default: false }
     },

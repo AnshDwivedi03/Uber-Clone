@@ -58,6 +58,14 @@ const MapController = ({ onCenterChange, isSelecting, bounds, center }) => {
         }
     }, [center, isSelecting, map]);
 
+    // Force resize to prevent blank map
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            map.invalidateSize();
+        }, 100);
+        return () => clearTimeout(timer);
+    }, [map]);
+
     // Fit bounds if provided
     useEffect(() => {
         if (bounds && bounds.length > 0 && !isSelecting) {
@@ -143,6 +151,9 @@ const LiveTracking = ({ pickup, destination, driverLocation, isSelecting, onLoca
     };
 
     useEffect(() => {
+        const abortController = new AbortController();
+        const signal = abortController.signal;
+
         const fetchRoute = async () => {
             if (isSelecting) {
                 setRoutePath([]);
@@ -153,41 +164,67 @@ const LiveTracking = ({ pickup, destination, driverLocation, isSelecting, onLoca
                 setRoutePath([]);
                 // If only pickup is set, show marker?
                 if (pickup) {
-                    const pCoords = await getCoords(pickup);
+                    const pCoords = await getCoords(pickup); // This technically might race too, but less critical than route
+                    if (signal.aborted) return;
                     setPickupCoords(pCoords);
-                    if (pCoords && !destination) setMapCenter(pCoords); // Center on pickup if only pickup
+                    if (pCoords && !destination) setMapCenter(pCoords); 
                 }
                 return;
             }
 
             try {
-                const pCoords = await getCoords(pickup);
-                const dCoords = await getCoords(destination);
+                // Parallelize Geocoding Requests
+                const [pCoords, dCoords] = await Promise.all([
+                    getCoords(pickup),
+                    getCoords(destination)
+                ]);
 
-                setPickupCoords(pCoords);
-                setDestinationCoords(dCoords);
+                if (signal.aborted) return;
 
                 if (!pCoords || !dCoords) return;
 
-                const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-route`, {
-                    params: {
-                        origin: typeof pickup === 'string' ? pickup : `${pickup.lat},${pickup.lng}`,
-                        destination: typeof destination === 'string' ? destination : `${destination.lat},${destination.lng}`
-                    },
-                    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                // Use EXPLICIT coordinates for Route API to ensure consistency with markers
+                // The backend handles "lat,lng" format via regex
+                // pCoords is { ltd, lng } or { lat, lng } depending on backend/frontend inconsistencies. 
+                // Let's normalize. 
+                // Backend getAddressCoordinate returns { ltd, lng }. MapController expects { lat, lng } or { ltd, lng }.
+                const pLat = pCoords.ltd || pCoords.lat;
+                const pLng = pCoords.lng;
+                const dLat = dCoords.ltd || dCoords.lat;
+                const dLng = dCoords.lng;
+
+                const origin = `${pLat},${pLng}`;
+                const dest = `${dLat},${dLng}`;
+
+                 const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-route`, {
+                    params: { origin, destination: dest },
+                    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                    signal: signal // Pass signal to axios
                 });
 
+                if (signal.aborted) return;
+
+                // Batch State Updates 
+                setPickupCoords(pCoords);
+                setDestinationCoords(dCoords);
+                
                 if (response.data && response.data.coordinates) {
                     const path = response.data.coordinates.map(coord => [coord[1], coord[0]]);
                     setRoutePath(path);
-                    // MapController will fit bounds automatically via `bounds` prop
                 }
+
             } catch (error) {
-                console.error("Error fetching route:", error);
+                if (axios.isCancel(error)) {
+                    console.log('Route fetch canceled');
+                } else {
+                    console.error("Error fetching route:", error);
+                }
             }
         };
 
         fetchRoute();
+
+        return () => abortController.abort();
     }, [pickup, destination, isSelecting]);
 
     return (

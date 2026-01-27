@@ -26,6 +26,11 @@ const captainSchema = new mongoose.Schema({
         required: true,
         select: false,
     },
+    phone: {
+        type: String,
+        required: true,
+        unique: true
+    },
     socketId: {
         type: String,
     },
@@ -55,7 +60,7 @@ const captainSchema = new mongoose.Schema({
         vehicleType: {
             type: String,
             required: true,
-            enum: ['moto', 'auto', 'mini', 'sedan'] // Updated to match spec
+            enum: ['moto', 'auto', 'mini'] // Updated to match spec match with frontend
         },
         model: { // Added model field
             type: String,

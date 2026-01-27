@@ -1,10 +1,11 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect, useContext } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import FinishRide from '../components/FinishRide'
 import { useGSAP } from '@gsap/react'
 import gsap from 'gsap'
-import LivingMap from '../components/LivingMap'
+import LiveTrackingMap from '../components/LiveTrackingMap' // Changed from LivingMap
 import { LogOut, ChevronUp } from 'lucide-react'
+import { SocketContext } from '../context/SocketContext'
 
 const CaptainRiding = () => {
 
@@ -12,6 +13,44 @@ const CaptainRiding = () => {
     const finishRidePanelRef = useRef(null)
     const location = useLocation()
     const rideData = location.state?.ride
+    const { socket } = useContext(SocketContext)
+    const [captainLocation, setCaptainLocation] = useState(null)
+    const [rideDistance, setRideDistance] = useState(null)
+
+    // Track Location
+    useEffect(() => {
+        if (!navigator.geolocation) {
+            console.error("Geolocation is not supported by this browser.")
+            return
+        }
+
+        const updateLocation = (position) => {
+            const { latitude, longitude } = position.coords
+            const newLocation = { lat: latitude, lng: longitude }
+            setCaptainLocation(newLocation)
+
+            // Emit location to server
+            // We attach rideId and riderId so server knows who to notify
+            socket.emit('update-location-captain', {
+                userId: rideData.captain._id,
+                location: { ltd: latitude, lng: longitude },
+                rideId: rideData._id,
+                riderId: rideData.user._id // Ensure this field exists in rideData
+            })
+        }
+
+        const watchId = navigator.geolocation.watchPosition(
+            updateLocation,
+            (error) => console.error("Error watching position:", error),
+            {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            }
+        )
+
+        return () => navigator.geolocation.clearWatch(watchId)
+    }, [socket, rideData])
 
     useGSAP(function () {
         if (finishRidePanel) {
@@ -39,7 +78,29 @@ const CaptainRiding = () => {
             </div>
 
             <div className='h-4/5 w-screen fixed top-0 z-0'>
-                <LivingMap active={true} />
+                {/* 
+                   Construct pickup/dropoff objects from rideData
+                   rideData.pickup.coordinates is [lng, lat] usually in Mongo GeoJSON
+                   Leaflet needs [lat, lng]
+                */}
+                <LiveTrackingMap 
+                    active={true}
+                    captainLocation={captainLocation}
+                    pickup={rideData ? { 
+                        lat: rideData.pickupLocation ? rideData.pickupLocation.lat : (rideData.pickup.coordinates ? rideData.pickup.coordinates[1] : 28.6139), 
+                        lng: rideData.pickupLocation ? rideData.pickupLocation.lng : (rideData.pickup.coordinates ? rideData.pickup.coordinates[0] : 77.2090) 
+                    } : null}
+                    dropoff={rideData ? { 
+                        lat: rideData.destinationLocation ? rideData.destinationLocation.lat : (rideData.drop.coordinates ? rideData.drop.coordinates[1] : 28.7041), 
+                        lng: rideData.destinationLocation ? rideData.destinationLocation.lng : (rideData.drop.coordinates ? rideData.drop.coordinates[0] : 77.1025) 
+                    } : null}
+                    updateTime={(data) => {
+                        // data has distance (meters) and time (seconds)
+                        console.log("Captain updated distance:", data.distance);
+                        // You can store this in local state to display
+                        setRideDistance(data.distance);
+                    }}
+                />
             </div>
 
             <div
@@ -53,13 +114,14 @@ const CaptainRiding = () => {
                 </div>
 
                 <div>
-                    <h4 className='text-3xl font-black text-black'>4 KM away</h4>
-                    <p className='text-black/70 font-bold text-sm'>Drop-off approaching</p>
+                     {/* Display dynamic distance if available, else static text */}
+                    <h4 className='text-xl font-bold text-black'>
+                        {rideDistance ? `${(rideDistance / 1000).toFixed(1)} KM away` : 'On way to drop'}
+                    </h4>
+                    <button className='bg-black text-white font-bold py-3 px-8 rounded-xl shadow-xl hover:bg-zinc-800 transition-colors mt-2'>
+                        Complete Ride
+                    </button>
                 </div>
-
-                <button className='bg-black text-white font-bold py-3 px-8 rounded-xl shadow-xl hover:bg-zinc-800 transition-colors'>
-                    Complete Ride
-                </button>
             </div>
 
             <div ref={finishRidePanelRef} className='fixed w-full z-[500] bottom-0 translate-y-full bg-dark-card border-t border-zinc-800 px-3 py-10 pt-12 shadow-2xl rounded-t-3xl'>

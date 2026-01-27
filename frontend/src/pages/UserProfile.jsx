@@ -1,66 +1,120 @@
-import React, { useContext } from 'react'
-import { UserDataContext } from '../context/UserContext'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, User, Mail, Phone, Shield } from 'lucide-react'
+import React, { useState, useContext } from 'react';
+import { UserDataContext } from '../context/UserContext';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { ArrowLeft, User, Phone, Save } from 'lucide-react';
+import Button from '../components/ui/Button';
 
 const UserProfile = () => {
-    const { user } = useContext(UserDataContext)
+    const { user, setUser } = useContext(UserDataContext);
+    const navigate = useNavigate();
+    const [fullname, setFullname] = useState({
+        firstname: user?.fullname?.firstname || '',
+        lastname: user?.fullname?.lastname || ''
+    });
+    const [phone, setPhone] = useState(user?.phone || '');
+    const [vibeProfile, setVibeProfile] = useState(user?.vibeProfile || { techno: false, quiet: false, ac: false });
+    const [message, setMessage] = useState('');
+
+    const updateProfile = async (e) => {
+        e.preventDefault();
+        try {
+            const response = await axios.put(`${import.meta.env.VITE_BASE_URL}/users/profile/update`, {
+                fullname,
+                phone,
+                vibeProfile
+            }, {
+                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+            });
+
+            if (response.status === 200) {
+                setUser(response.data);
+                setMessage('Profile updated successfully!');
+                setTimeout(() => setMessage(''), 3000);
+            }
+        } catch (err) {
+            console.error(err);
+            setMessage('Update failed');
+        }
+    };
+
+    const toggleVibe = (key) => setVibeProfile(prev => ({ ...prev, [key]: !prev[key] }));
 
     return (
-        <div className='h-screen bg-dark-bg text-white overflow-hidden flex flex-col'>
-            <div className='p-4 py-6 border-b border-zinc-800 flex items-center gap-4'>
-                <Link to='/home' className='w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center hover:bg-zinc-700 transition-colors'>
-                    <ArrowLeft size={20} className="text-lime-400" />
-                </Link>
-                <h1 className='text-xl font-bold'>My Profile</h1>
-            </div>
+        <div className="min-h-screen bg-dark-bg text-white p-6 relative">
+            <button onClick={() => navigate('/home')} className="absolute top-6 left-6 p-2 bg-zinc-800 rounded-full hover:bg-zinc-700">
+                <ArrowLeft size={24} />
+            </button>
+            <h1 className="text-2xl font-bold text-center mb-8 mt-2">Edit Profile</h1>
 
-            <div className='p-6 flex flex-col gap-6 overflow-y-auto'>
-                {/* Avatar Section */}
-                <div className='flex flex-col items-center gap-4'>
-                    <div className='w-24 h-24 bg-zinc-800 rounded-full flex items-center justify-center border-4 border-lime-500 shadow-[0_0_20px_rgba(132,204,22,0.3)]'>
-                        <span className='text-4xl font-black text-lime-400'>{user?.fullname?.firstname[0]}</span>
+            {message && <div className="bg-lime-500/20 text-lime-400 p-3 rounded-xl mb-6 text-center text-sm font-bold border border-lime-500/50">{message}</div>}
+
+            <form onSubmit={updateProfile} className="max-w-md mx-auto space-y-6">
+                
+                {/* Name Section */}
+                <div className="bg-dark-card p-4 rounded-xl border border-zinc-800">
+                    <h3 className="text-zinc-400 text-xs font-bold uppercase mb-4 flex items-center gap-2">
+                        <User size={14} /> Personal Info
+                    </h3>
+                    <div className="flex gap-4 mb-4">
+                        <div className="w-1/2">
+                            <label className="text-xs text-zinc-500 block mb-1">First Name</label>
+                            <input 
+                                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-3 focus:border-brand-primary outline-none"
+                                value={fullname.firstname}
+                                onChange={(e) => setFullname({...fullname, firstname: e.target.value})}    
+                            />
+                        </div>
+                        <div className="w-1/2">
+                            <label className="text-xs text-zinc-500 block mb-1">Last Name</label>
+                            <input 
+                                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-3 focus:border-brand-primary outline-none"
+                                value={fullname.lastname}
+                                onChange={(e) => setFullname({...fullname, lastname: e.target.value})}    
+                            />
+                        </div>
                     </div>
-                    <h2 className='text-2xl font-bold capitalize'>{user?.fullname?.firstname} {user?.fullname?.lastname}</h2>
                 </div>
 
-                {/* Info Cards */}
-                <div className='bg-zinc-900/50 p-4 rounded-xl border border-zinc-800 flex items-center gap-4'>
-                    <Mail className="text-lime-400" />
+                {/* Contact Section */}
+                <div className="bg-dark-card p-4 rounded-xl border border-zinc-800">
+                    <h3 className="text-zinc-400 text-xs font-bold uppercase mb-4 flex items-center gap-2">
+                        <Phone size={14} /> Contact
+                    </h3>
                     <div>
-                        <p className='text-xs text-zinc-500 font-bold uppercase'>Email</p>
-                        <p className='font-medium'>{user?.email}</p>
+                        <label className="text-xs text-zinc-500 block mb-1">Phone Number</label>
+                        <input 
+                            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-3 focus:border-brand-primary outline-none"
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}    
+                            placeholder="+91..."
+                        />
                     </div>
                 </div>
 
-                <div className='bg-zinc-900/50 p-4 rounded-xl border border-zinc-800 flex items-center gap-4'>
-                    <Phone className="text-lime-400" />
-                    <div>
-                        <p className='text-xs text-zinc-500 font-bold uppercase'>Phone</p>
-                        <p className='font-medium'>+91 99999 99999</p>
+                {/* Vibe Section */}
+                <div className="bg-dark-card p-4 rounded-xl border border-zinc-800">
+                    <h3 className="text-zinc-400 text-xs font-bold uppercase mb-4">Default Vibes</h3>
+                    <div className="grid grid-cols-3 gap-3">
+                        {['techno', 'ac', 'quiet'].map(v => (
+                            <button
+                                key={v}
+                                type="button"
+                                onClick={() => toggleVibe(v)}
+                                className={`p-3 rounded-lg border text-xs font-bold capitalize transition-all ${vibeProfile[v] ? 'bg-brand-primary text-black border-brand-primary' : 'bg-zinc-900 text-zinc-500 border-zinc-800'}`}
+                            >
+                                {v === 'ac' ? 'AC Max' : v === 'quiet' ? 'Quiet Ride' : 'Techno Lover'}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
-                <div className='bg-zinc-900/50 p-4 rounded-xl border border-zinc-800 flex items-center gap-4'>
-                    <Shield className="text-lime-400" />
-                    <div>
-                        <p className='text-xs text-zinc-500 font-bold uppercase'>Account Status</p>
-                        <p className='font-medium text-lime-400'>Verified Rider</p>
-                    </div>
-                </div>
-
-                {/* Vibe Profile Display */}
-                <div className='bg-zinc-900/50 p-4 rounded-xl border border-zinc-800'>
-                    <p className='text-xs text-zinc-500 font-bold uppercase mb-3'>My Vibe</p>
-                    <div className='flex gap-2 flex-wrap'>
-                        <span className='px-3 py-1 bg-zinc-800 rounded-full text-xs font-bold border border-zinc-700 text-lime-400'>Techno Lover</span>
-                        <span className='px-3 py-1 bg-zinc-800 rounded-full text-xs font-bold border border-zinc-700 text-lime-400'>Quiet Ride</span>
-                        <span className='px-3 py-1 bg-zinc-800 rounded-full text-xs font-bold border border-zinc-700 text-lime-400'>AC Max</span>
-                    </div>
-                </div>
-            </div>
+                <Button type="submit" className="w-full">
+                    <Save className="mr-2" size={18} /> Save Changes
+                </Button>
+            </form>
         </div>
-    )
-}
+    );
+};
 
-export default UserProfile
+export default UserProfile;

@@ -20,9 +20,10 @@ router.post('/login', [
     userController.loginUser
 )
 
-router.get('/profile', authMiddleware.authUser, userController.getUserProfile)
-
-router.get('/logout', authMiddleware.authUser, userController.logoutUser)
+router.get('/profile', authMiddleware.authUser, userController.getUserProfile);
+router.get('/history', authMiddleware.authUser, userController.getHistory);
+router.put('/profile/update', authMiddleware.authUser, userController.updateProfile);
+router.get('/logout', authMiddleware.authUser, userController.logoutUser);
 
 
 

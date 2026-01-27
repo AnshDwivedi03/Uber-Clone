@@ -19,10 +19,10 @@ const CaptainSignup = () => {
   const [password, setPassword] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
-
+  const [phone, setPhone] = useState('');
   const [vehicleColor, setVehicleColor] = useState('')
   const [vehiclePlate, setVehiclePlate] = useState('')
-  const [vehicleCapacity, setVehicleCapacity] = useState('')
+  const [vehicleModel, setVehicleModel] = useState('')
   const [vehicleType, setVehicleType] = useState('') // 'car', 'auto', 'moto'
 
 
@@ -41,10 +41,11 @@ const CaptainSignup = () => {
       },
       email: email,
       password: password,
+      phone: phone,
       vehicle: {
         color: vehicleColor,
         plate: vehiclePlate,
-        capacity: Number(vehicleCapacity),
+        model: vehicleModel,
         vehicleType: vehicleType
       }
     }
@@ -77,7 +78,7 @@ const CaptainSignup = () => {
     e.preventDefault();
     // Basic Validation for Step 1
     if (step === 1) {
-      if (!firstName || !lastName || !email || !password) {
+      if (!firstName || !lastName || !email || !password || !phone) {
         setError("Please fill in all personal details.");
         return;
       }
@@ -168,6 +169,18 @@ const CaptainSignup = () => {
                 />
               </div>
 
+              <div className="mb-4">
+                <label className="text-xs font-bold text-zinc-500 uppercase mb-1 ml-1">Phone Number</label>
+                <input
+                  required
+                  value={phone}
+                  onChange={(e) => { setPhone(e.target.value); setError(null); }}
+                  className='bg-zinc-900 w-full rounded-xl px-4 py-3 border border-zinc-700 placeholder:text-zinc-600 focus:border-lime-500 focus:outline-none transition-colors text-white'
+                  type="tel"
+                  placeholder='+91 9876543210'
+                />
+              </div>
+
               <div className="mb-8">
                 <label className="text-xs font-bold text-zinc-500 uppercase mb-1 ml-1">Password</label>
                 <input
@@ -226,15 +239,14 @@ const CaptainSignup = () => {
 
               <div className='flex gap-4 mb-8'>
                 <div className="w-1/2">
-                  <label className="text-xs font-bold text-zinc-500 uppercase mb-1 ml-1">Capacity</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase mb-1 ml-1">Vehicle Model</label>
                   <input
                     required
                     className='bg-zinc-900 w-full rounded-xl px-4 py-3 border border-zinc-700 placeholder:text-zinc-600 focus:border-lime-500 focus:outline-none transition-colors text-white'
-                    type="number"
-                    min="1"
-                    placeholder='Seats'
-                    value={vehicleCapacity}
-                    onChange={(e) => setVehicleCapacity(e.target.value)}
+                    type="text"
+                    placeholder='e.g. Toyota Corolla'
+                    value={vehicleModel}
+                    onChange={(e) => setVehicleModel(e.target.value)}
                   />
                 </div>
                 <div className="w-1/2">
@@ -248,7 +260,7 @@ const CaptainSignup = () => {
                     }}
                   >
                     <option value="" disabled className='text-zinc-500'>Select Type</option>
-                    <option value="car">Car</option>
+                    <option value="mini">Mini</option>
                     <option value="auto">Auto</option>
                     <option value="moto">Moto</option>
                   </select>

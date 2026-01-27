@@ -55,29 +55,45 @@ function getOtp(num) {
 
 
 module.exports.createRide = async ({
-    user, pickup, destination, vehicleType
+    user, pickup, destination, vehicleType, vibe, bid
 }) => {
     if (!user || !pickup || !destination || !vehicleType) {
         throw new Error('All fields are required');
     }
 
-    const fare = await getFare(pickup, destination);
+    const fareValues = await getFare(pickup, destination);
 
-
+    // Fetch coordinates
+    // We already do this inside getFare but getFare returns numbers.
+    // We need the coords for the DB model.
+    // Optimization: getFare calls getDistanceTime which calls getAddressCoordinate.
+    // We are calling it again here. Ideally refactor, but for now just call it.
+    const pickupCoordinates = await mapService.getAddressCoordinate(pickup);
+    const destinationCoordinates = await mapService.getAddressCoordinate(destination);
 
     const ride = await rideModel.create({
-        user,
-        pickup,
-        destination,
+        rider: user,
+        pickup: {
+            address: pickup,
+            coordinates: [pickupCoordinates.lng, pickupCoordinates.ltd] // GeoJSON format [lng, lat]
+        },
+        drop: {
+            address: destination,
+            coordinates: [destinationCoordinates.lng, destinationCoordinates.ltd]
+        },
         otp: getOtp(6),
-        fare: fare[vehicleType]
+        fare: {
+            initialBid: bid || fareValues[vehicleType]
+        },
+        vibe: vibe, // Add vibe here
+        status: 'requested'
     })
 
     // Publish to RabbitMQ
     const rabbitMQ = require('./rabbitmq.service');
 
     // We need to populate the user details for the frontend to display them
-    const rideWithUser = await rideModel.findOne({ _id: ride._id }).populate('user');
+    const rideWithUser = await rideModel.findOne({ _id: ride._id }).populate('rider');
     console.log('Publishing ride to RabbitMQ:', JSON.stringify(rideWithUser, null, 2));
 
     await rabbitMQ.publishToQueue('ride-requests', rideWithUser);
@@ -101,7 +117,7 @@ module.exports.confirmRide = async ({
 
     const ride = await rideModel.findOne({
         _id: rideId
-    }).populate('user').populate('captain').select('+otp');
+    }).populate('rider').populate('captain').select('+otp');
 
     if (!ride) {
         throw new Error('Ride not found');
@@ -118,7 +134,7 @@ module.exports.startRide = async ({ rideId, otp, captain }) => {
 
     const ride = await rideModel.findOne({
         _id: rideId
-    }).populate('user').populate('captain').select('+otp');
+    }).populate('rider').populate('captain').select('+otp');
 
     if (!ride) {
         throw new Error('Ride not found');
@@ -149,7 +165,7 @@ module.exports.endRide = async ({ rideId, captain }) => {
     const ride = await rideModel.findOne({
         _id: rideId,
         captain: captain._id
-    }).populate('user').populate('captain').select('+otp');
+    }).populate('rider').populate('captain').select('+otp');
 
     if (!ride) {
         throw new Error('Ride not found');
@@ -195,16 +211,33 @@ module.exports.subscribeToRideAccepted = async () => {
 
             const rideWithDetails = await rideModel.findOne({
                 _id: rideId
-            }).populate('user').populate('captain').select('+otp');
-
+            }).populate('rider').populate('captain').select('+otp');
+            
             // Notify User
-            if (rideWithDetails.user && rideWithDetails.user.socketId) {
-                console.log(`Sending ride-confirmed to user ${rideWithDetails.user._id} at socket ${rideWithDetails.user.socketId}`);
-                console.log('Ride details sent to user (OTP check):', rideWithDetails.otp);
-                // console.log('Full ride details:', JSON.stringify(rideWithDetails, null, 2));
-                sendMessageToSocketId(rideWithDetails.user.socketId, {
+            if (rideWithDetails.rider && rideWithDetails.rider.socketId) {
+                console.log(`Sending ride-confirmed to user ${rideWithDetails.rider._id} at socket ${rideWithDetails.rider.socketId}`);
+                
+                // DEEP COPY and FLATTEN for Frontend
+                const rideForFrontend = {
+                    ...rideWithDetails.toObject(),
+                    pickup: rideWithDetails.pickup.address,
+                    destination: rideWithDetails.drop.address,
+                    // NEW FIELDS for Map consistency
+                    pickupLocation: {
+                         lat: rideWithDetails.pickup.coordinates[1],
+                         lng: rideWithDetails.pickup.coordinates[0]
+                    },
+                    destinationLocation: {
+                         lat: rideWithDetails.drop.coordinates[1],
+                         lng: rideWithDetails.drop.coordinates[0]
+                    },
+                    fare: rideWithDetails.fare.initialBid,
+                    user: rideWithDetails.rider
+                };
+
+                sendMessageToSocketId(rideWithDetails.rider.socketId, {
                     event: 'ride-confirmed',
-                    data: rideWithDetails
+                    data: rideForFrontend
                 });
             } else {
                 console.log('User socketId not found for ride:', rideId);
@@ -212,10 +245,19 @@ module.exports.subscribeToRideAccepted = async () => {
 
             // Notify Captain? (The one who accepted)
             if (rideWithDetails.captain && rideWithDetails.captain.socketId) {
+                // Flatten for Captain too
+                 const rideForFrontend = {
+                    ...rideWithDetails.toObject(),
+                    pickup: rideWithDetails.pickup.address,
+                    destination: rideWithDetails.drop.address,
+                    fare: rideWithDetails.fare.initialBid,
+                    user: rideWithDetails.rider
+                };
+
                 console.log(`Sending ride-confirmed to captain ${rideWithDetails.captain._id} at socket ${rideWithDetails.captain.socketId}`);
                 sendMessageToSocketId(rideWithDetails.captain.socketId, {
                     event: 'ride-confirmed',
-                    data: rideWithDetails
+                    data: rideForFrontend
                 });
             }
 
@@ -225,3 +267,27 @@ module.exports.subscribeToRideAccepted = async () => {
     });
 }
 
+
+
+module.exports.getRideHistory = async ({ userId, userType }) => {
+    if (!userId || !userType) {
+        throw new Error('User id and user type are required');
+    }
+
+    let query = {
+        status: 'completed'
+    };
+
+    if (userType === 'rider') {
+        query.rider = userId;
+    } else if (userType === 'captain') {
+        query.captain = userId;
+    }
+
+    const rides = await rideModel.find(query)
+        .populate('rider')
+        .populate('captain')
+        .sort({ createdAt: -1 }); // Sort by newest first
+
+    return rides;
+}

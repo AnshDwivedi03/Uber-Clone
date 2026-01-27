@@ -1,7 +1,7 @@
 import React, { useState, useRef, useContext, useEffect } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { UserDataContext } from '../context/UserContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import LivingMap from '../components/LivingMap';
 import LiveTracking from '../components/LiveTracking';
 import Button from '../components/ui/Button';
@@ -19,6 +19,7 @@ const Home = () => {
     const [drop, setDrop] = useState('');
     const [fare, setFare] = useState({});
     const [bidFare, setBidFare] = useState('');
+    const [ride, setRide] = useState(null); // Store ride details including _id
     const [vehicleType, setVehicleType] = useState(null);
     const [panelOpen, setPanelOpen] = useState(false);
     const [vehiclePanel, setVehiclePanel] = useState(false);
@@ -31,8 +32,26 @@ const Home = () => {
     const [mapSelectionMode, setMapSelectionMode] = useState(null); // 'pickup' | 'drop' | null
     const [tempMapCoords, setTempMapCoords] = useState(null);
 
-    const { socket } = useSocket();
+    const { socket, joinIdentity } = useSocket();
     const { user } = useContext(UserDataContext);
+    const navigate = useNavigate();
+
+    // Default Vibe from User Profile
+    const [vibe, setVibe] = useState({ techno: false, quiet: false, ac: false });
+    const vibeInitialized = useRef(false);
+
+    useEffect(() => {
+        if (user && user.vibeProfile && !vibeInitialized.current) {
+            setVibe(user.vibeProfile);
+            vibeInitialized.current = true;
+        }
+    }, [user]);
+
+    useEffect(() => {
+        if (user && socket) {
+             joinIdentity(user._id, 'user');
+        }
+    }, [user, socket]);
 
     const panelRef = useRef(null);
     const [pickupSuggestions, setPickupSuggestions] = useState([]);
@@ -50,16 +69,26 @@ const Home = () => {
         setConfirmRidePanel(false);
         setWaitingForDriver(true);
 
-        const rideData = {
-            pickup: pickup, // String address
-            drop: drop,     // String address
-            bid: Number(fare),
-            vibe: user.vibeProfile,
-            userId: user._id
-        };
-
-        if (socket) {
-            socket.emit('ride-request', rideData);
+        try {
+            console.log('Creating ride with:', { pickup, drop, vehicleType, vibe, bid: bidFare });
+            const response = await axios.post(`${import.meta.env.VITE_BASE_URL}/rides/create`, {
+                pickup,
+                destination: drop,
+                vehicleType,
+                vibe, 
+                bid: bidFare
+            }, {
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+            console.log('Ride Created:', response.data);
+            setRide(response.data); // Save ride details
+            // The backend now publishes to queue. We just wait for socket events.
+        } catch (err) {
+            console.error('Error creating ride:', err);
+            // Handle error (maybe show toast)
+            setWaitingForDriver(false);
         }
     };
 
@@ -80,34 +109,49 @@ const Home = () => {
         }
     };
 
-    const handlePickupChange = async (e) => {
+    // Debounced Search Logic
+    useEffect(() => {
+        const timer = setTimeout(async () => {
+             if (activeField === 'pickup' && pickup.length >= 3) {
+                try {
+                    const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-suggestions`, {
+                        params: { input: pickup },
+                        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                    });
+                    setPickupSuggestions(response.data);
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+        }, 300); // 300ms debounce
+        return () => clearTimeout(timer);
+    }, [pickup]);
+
+    useEffect(() => {
+        const timer = setTimeout(async () => {
+            if (activeField === 'drop' && drop.length >= 3) {
+                 try {
+                    const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-suggestions`, {
+                        params: { input: drop },
+                        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                    });
+                    setDropSuggestions(response.data);
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+        }, 300); // 300ms debounce
+        return () => clearTimeout(timer);
+    }, [drop]);
+
+    const handlePickupChange = (e) => {
         setPickup(e.target.value);
-        if (e.target.value.length < 3) return;
-        try {
-            const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-suggestions`, {
-                params: { input: e.target.value },
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            setPickupSuggestions(response.data);
-            setActiveField('pickup');
-        } catch (err) {
-            console.error(err);
-        }
+        setActiveField('pickup');
     };
 
-    const handleDropChange = async (e) => {
+    const handleDropChange = (e) => {
         setDrop(e.target.value);
-        if (e.target.value.length < 3) return;
-        try {
-            const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-suggestions`, {
-                params: { input: e.target.value },
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            setDropSuggestions(response.data);
-            setActiveField('drop');
-        } catch (err) {
-            console.error(err);
-        }
+        setActiveField('drop');
     };
 
     const confirmMapSelection = async () => {
@@ -171,6 +215,9 @@ const Home = () => {
             // Normally we navigate to /riding
             // But logic is currently here? Oh, ride-confirmed doesn't navigate automatically?
             // It should!
+            setWaitingForDriver(false);
+            setVehiclePanel(false);
+            navigate('/riding', { state: { ride: data } });
         });
 
         return () => {
@@ -383,6 +430,8 @@ const Home = () => {
                                 setVehiclePanel={setVehiclePanel}
                                 bidFare={bidFare}
                                 setBidFare={setBidFare}
+                                vibe={vibe}
+                                setVibe={setVibe}
                             />
                         </div>
                     )
@@ -401,6 +450,7 @@ const Home = () => {
                                 setConfirmRidePanel={setConfirmRidePanel}
                                 setVehicleFound={setWaitingForDriver}
                                 bidFare={bidFare}
+                                setBidFare={setBidFare}
                             />
                         </div>
                     )
@@ -433,8 +483,8 @@ const Home = () => {
                                 userType="rider"
                                 onAccept={(amount) => {
                                     socket.emit('accept-bid', {
-                                        rideId: 'temp_ride_id',
-                                        captainId: activeBid.captainId, // Wait, activeBid payload structure?
+                                        rideId: ride?._id, // Use actual ride ID
+                                        captainId: activeBid.captainId,
                                         amount
                                     });
                                 }}

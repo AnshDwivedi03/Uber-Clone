@@ -1,8 +1,8 @@
-import React, { useEffect, useContext } from 'react'
+import React, { useEffect, useContext, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { SocketContext } from '../context/SocketContext'
 import { useNavigate } from 'react-router-dom'
-import LivingMap from '../components/LivingMap'
+import LiveTrackingMap from '../components/LiveTrackingMap'
 import { Home, MapPin, Wallet, CheckCircle } from 'lucide-react'
 import Button from '../components/ui/Button'
 
@@ -11,10 +11,21 @@ const Riding = () => {
     const { ride } = location.state || {}
     const { socket } = useContext(SocketContext)
     const navigate = useNavigate()
+    const [captainLocation, setCaptainLocation] = useState(null)
+    const [rideDistance, setRideDistance] = useState(null)
+    const [rideTime, setRideTime] = useState(null)
 
     socket.on("ride-ended", () => {
         navigate('/home')
     })
+    
+    // Listen for captain location updates
+    useEffect(() => {
+        socket.on('captain-location-update', (data) => {
+             // data: { lat, lng }
+             setCaptainLocation({ lat: data.lat, lng: data.lng })
+        })
+    }, [socket])
 
     return (
         <div className='h-screen relative overflow-hidden bg-dark-bg'>
@@ -25,7 +36,23 @@ const Riding = () => {
             </div>
 
             <div className='h-1/2 w-screen absolute top-0 z-0'>
-                <LivingMap active={true} />
+                <LiveTrackingMap 
+                    active={true}
+                    captainLocation={captainLocation}
+                    pickup={ride ? { 
+                        lat: ride.pickupLocation ? ride.pickupLocation.lat : (ride.pickup.coordinates ? ride.pickup.coordinates[1] : 28.6139), 
+                        lng: ride.pickupLocation ? ride.pickupLocation.lng : (ride.pickup.coordinates ? ride.pickup.coordinates[0] : 77.2090) 
+                    } : null}
+                    dropoff={ride ? { 
+                        lat: ride.destinationLocation ? ride.destinationLocation.lat : (ride.drop.coordinates ? ride.drop.coordinates[1] : 28.7041), 
+                        lng: ride.destinationLocation ? ride.destinationLocation.lng : (ride.drop.coordinates ? ride.drop.coordinates[0] : 77.1025) 
+                    } : null}
+                    updateTime={(data) => {
+                        setRideDistance(data.distance);
+                        setRideTime(data.time);
+                    }}
+                />
+                
                 {/* Overlay gradient */}
                 <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-dark-bg to-transparent pointer-events-none" />
             </div>
@@ -38,7 +65,21 @@ const Riding = () => {
                     <div className='text-right'>
                         <h2 className='text-xl font-bold text-white capitalize'>{ride?.captain.fullname.firstname} is driving</h2>
                         <h4 className='text-3xl font-black text-lime-400 -my-1 tracking-tighter'>{ride?.captain.vehicle.plate}</h4>
-                        <p className='text-sm text-zinc-500 font-medium mt-1'>Maruti Suzuki Alto • White</p>
+                        <p className='text-sm text-zinc-500 font-medium mt-1 capitalize'>
+                            {ride?.captain.vehicle.model} ({ride?.captain.vehicle.vehicleType}) • {ride?.captain.vehicle.color}
+                        </p>
+                        
+                        {/* Distance & Time Display */}
+                        {rideDistance && (
+                            <p className="text-white font-bold text-sm mt-1 bg-zinc-800 px-2 py-1 rounded-md inline-block">
+                                { (rideDistance / 1000).toFixed(1) } KM • { Math.ceil(rideTime / 60) } min
+                            </p>
+                        )}
+
+                        <div className='mt-2 bg-zinc-800 px-4 py-2 rounded-lg inline-block border border-lime-500/30'>
+                            <span className="text-zinc-400 font-bold text-xs uppercase mr-2">OTP</span>
+                            <span className="text-lime-400 text-2xl font-mono font-black tracking-widest">{ride?.otp}</span>
+                        </div>
                     </div>
                 </div>
 

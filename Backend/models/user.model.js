@@ -12,7 +12,6 @@ const userSchema = new mongoose.Schema({
         },
         lastname: {
             type: String,
-            minlength: [3, 'Last name must be at least 3 characters long'],
         }
     },
     email: {
@@ -21,17 +20,18 @@ const userSchema = new mongoose.Schema({
         unique: true,
         minlength: [5, 'Email must be at least 5 characters long'],
     },
-    // Adding phone for OTP login flow
-    phone: {
-        type: String,
-        required: false, // Can make true once we fully switch to phone auth
-        unique: true,
-        sparse: true, // Allows null/unique
-    },
     password: {
         type: String,
         required: true,
         select: false,
+    },
+    phone: {
+        type: String,
+        required: true,
+        unique: true
+    },
+    socketId: {
+        type: String,
     },
     /* SKRRRT Specific Fields */
     rating: {
@@ -39,17 +39,14 @@ const userSchema = new mongoose.Schema({
         default: 5.0
     },
     vibeProfile: {
-        music: { type: Boolean, default: false },
+        techno: { type: Boolean, default: false },
         quiet: { type: Boolean, default: false },
         ac: { type: Boolean, default: false }
     },
     currentRideId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'ride'
-    },
-    socketId: {
-        type: String,
-    },
+    }
 })
 // for single user
 userSchema.methods.generateAuthToken = function () {

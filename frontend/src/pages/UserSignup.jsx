@@ -13,7 +13,8 @@ const UserSignup = () => {
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [vibe, setVibe] = useState({ music: false, ac: false, quiet: false });
+  const [phone, setPhone] = useState('');
+  const [vibe, setVibe] = useState({ techno: false, ac: false, quiet: false });
   const [error, setError] = useState(null);
 
   const navigate = useNavigate();
@@ -28,6 +29,7 @@ const UserSignup = () => {
         fullname: { firstname: firstName, lastname: lastName },
         email: email,
         password: password,
+        phone: phone, 
         vibeProfile: vibe
       };
       const response = await axios.post(`${import.meta.env.VITE_BASE_URL}/users/register`, newUser);
@@ -122,10 +124,10 @@ const UserSignup = () => {
               <input
                 required
                 className="bg-zinc-900 w-full rounded-xl px-4 py-3 border border-zinc-700 placeholder:text-zinc-500 focus:border-brand-primary focus:outline-none transition-colors mb-4"
-                type="email"
-                placeholder="name@email.com"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(null); }}
+                type="tel"
+                placeholder="Phone Number"
+                value={phone}
+                onChange={(e) => { setPhone(e.target.value); setError(null); }}
               />
               <input
                 className="bg-zinc-900 w-full rounded-xl px-4 py-3 border border-zinc-700 placeholder:text-zinc-500 focus:border-brand-primary focus:outline-none transition-colors mb-6"
@@ -155,19 +157,19 @@ const UserSignup = () => {
               <div className="grid grid-cols-3 gap-3 mb-8">
                 <VibeCard
                   icon={Music}
-                  label="Music"
-                  active={vibe.music}
-                  onClick={() => toggleVibe('music')}
+                  label="Techno Lover"
+                  active={vibe.techno}
+                  onClick={() => toggleVibe('techno')}
                 />
                 <VibeCard
                   icon={Wind}
-                  label="AC"
+                  label="AC Max"
                   active={vibe.ac}
                   onClick={() => toggleVibe('ac')}
                 />
                 <VibeCard
                   icon={VolumeX}
-                  label="Quiet"
+                  label="Quiet Ride"
                   active={vibe.quiet}
                   onClick={() => toggleVibe('quiet')}
                 />

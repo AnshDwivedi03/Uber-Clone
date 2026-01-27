@@ -2,9 +2,9 @@ const captainModel = require('../models/captain.model');
 
 
 module.exports.createCaptain = async ({
-    firstname, lastname, email, password, color, plate, capacity, vehicleType
+    firstname, lastname, email, password, color, plate, capacity, vehicleType, model, phone
 }) => {
-    if (!firstname || !email || !password || !color || !plate || !capacity || !vehicleType) {
+    if (!firstname || !email || !password || !color || !plate || !capacity || !vehicleType || !model || !phone) {
         throw new Error('All fields are required');
     }
     const captain = captainModel.create({
@@ -14,11 +14,13 @@ module.exports.createCaptain = async ({
         },
         email,
         password,
+        phone,
         vehicle: {
             color,
             plate,
             capacity,
-            vehicleType
+            vehicleType,
+            model
         }
     })
 
@@ -36,14 +38,20 @@ module.exports.subscribeToRideRequests = async () => {
 
     await rabbitMQ.consumeQueue('ride-requests', async (rideData) => {
         console.log('Processing ride request:', rideData._id);
+        console.log('Ride Data Vibe received in Queue:', rideData.vibe);
         try {
             // 1. Get Coordinates
-            const pickupCoordinates = await mapService.getAddressCoordinate(rideData.pickup);
+            // rideData.pickup is now an object { address, coordinates: [lng, lat] }
+            // So we don't need to geocode again!
+            const pickupCoordinates = {
+                ltd: rideData.pickup.coordinates[1],
+                lng: rideData.pickup.coordinates[0]
+            };
             console.log(`Pickup Coordinates for ride ${rideData._id}:`, pickupCoordinates);
 
             // 2. Get Nearest Captains from Redis
             console.log(`Searching for captains within 5km of ${pickupCoordinates.ltd}, ${pickupCoordinates.lng}...`);
-            const captainsInRedis = await redisService.getNearestCaptains(pickupCoordinates.ltd, pickupCoordinates.lng, 5); // 5km radius
+            const captainsInRedis = await redisService.getCaptainsNearby(pickupCoordinates.ltd, pickupCoordinates.lng, 5); // 5km radius
             console.log('Captains found in Redis:', captainsInRedis);
 
             if (!captainsInRedis || captainsInRedis.length === 0) {
@@ -52,13 +60,13 @@ module.exports.subscribeToRideRequests = async () => {
             }
 
             // 3. Get Captain Details (SocketID) from DB
-            // captainsInRedis is [{ member: 'id', distance: '...' }, ...]
-            const captainIds = captainsInRedis.map(c => c.member);
+            // captainsInRedis is ['id1', 'id2'] (Redis geoSearch returns member strings)
+            const captainIds = captainsInRedis;
             console.log('Captain IDs from Redis:', captainIds);
 
             const captains = await captainModel.find({
                 _id: { $in: captainIds },
-                status: 'active' // Only notify active captains
+                isOnline: true 
             });
             console.log('Active captains found in DB:', captains.length);
             console.log('Details of active captains found:', captains); // Log the full captains array
@@ -68,14 +76,48 @@ module.exports.subscribeToRideRequests = async () => {
             }
 
             // 4. Notify Captains
+            // Populate User Details
+            // rideData actually comes from rideModel.findOne().populate('rider') in ride.service.js
+            // So rideData.rider should already be populated!
+            // BUT, rabbitMQ messages are just JSON. 
+            // If ride.service.js populated 'rider', then rideData.rider is the user object.
+            // Let's rely on that instead of re-querying if possible, or query if missing.
+            
+            if (!rideData.rider) {
+                // If for some reason it's not populated or we are using old logic:
+                 rideData.rider = await require('../models/user.model').findById(rideData.rider || rideData.user).select('-password');
+            }
+            
+            // Legacy support for frontend expecting 'user' property?
+            // If frontend expects 'ride.user', we might need to map it.
+            rideData.user = rideData.rider; 
+
             captains.forEach(captain => {
                 if (captain.socketId) {
                     console.log(`Sending new-ride to captain ${captain._id}. Payload user:`, rideData.user);
+                    
+                    // DEEP COPY and FLATTEN the object to match Frontend expectations
+                    const rideForFrontend = {
+                        ...rideData,
+                        pickup: rideData.pickup.address,
+                        destination: rideData.drop.address,
+                        // NEW FIELDS for Map consistency
+                        pickupLocation: {
+                            lat: rideData.pickup.coordinates[1],
+                            lng: rideData.pickup.coordinates[0]
+                        },
+                        destinationLocation: {
+                            lat: rideData.drop.coordinates[1],
+                            lng: rideData.drop.coordinates[0]
+                        },
+                        fare: rideData.fare.initialBid,
+                        user: rideData.rider // Ensure user is populated
+                    };
+
                     sendMessageToSocketId(captain.socketId, {
                         event: 'new-ride',
-                        data: rideData
+                        data: rideForFrontend
                     });
-                    // Also sending distance info could be nice, but keeping it simple
                 }
             });
             console.log(`Notified ${captains.length} captains for ride ${rideData._id}`);

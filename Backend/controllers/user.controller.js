@@ -4,79 +4,113 @@ const { validationResult } = require('express-validator');
 const blackListTokenModel = require('../models/blackListToken.model');
 
 module.exports.registerUser = async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
 
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        console.log('Validation errors:', errors.array());
-        return res.status(400).json({ errors: errors.array() });
+        const { fullname, email, password } = req.body;
+
+        const isUserAlready = await userModel.findOne({ email });
+
+        if (isUserAlready) {
+            return res.status(400).json({ message: 'User already exist' });
+        }
+
+        const hashedPassword = await userModel.hashPassword(password);
+
+        const user = await userService.createUser({
+            firstname: fullname.firstname,
+            lastname: fullname.lastname,
+            email,
+            password: hashedPassword,
+            phone: req.body.phone,
+            vibeProfile: req.body.vibeProfile
+        });
+
+        const token = user.generateAuthToken();
+
+        res.status(201).json({ token, user });
+    } catch (err) {
+        next(err);
     }
-
-    const { fullname, email, password } = req.body;
-
-    const isUserAlready = await userModel.findOne({ email });
-
-    if (isUserAlready) {
-        return res.status(400).json({ message: 'User already exist' });
-    }
-
-    const hashedPassword = await userModel.hashPassword(password);
-
-    const user = await userService.createUser({
-        firstname: fullname.firstname,
-        lastname: fullname.lastname,
-        email,
-        password: hashedPassword
-    });
-
-    const token = user.generateAuthToken();
-
-    res.status(201).json({ token, user });
-
-
 }
 
 module.exports.loginUser = async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
 
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+        const { email, password } = req.body;
+
+        const user = await userModel.findOne({ email }).select('+password');
+
+        if (!user) {
+            return res.status(401).json({ message: 'Invalid email or password' });
+        }
+
+        const isMatch = await user.comparePassword(password);
+
+        if (!isMatch) {
+            return res.status(401).json({ message: 'Invalid email or password' });
+        }
+
+        const token = user.generateAuthToken();
+
+        res.cookie('token', token);
+
+        res.status(200).json({ token, user });
+    } catch (err) {
+        next(err);
     }
-
-    const { email, password } = req.body;
-
-    const user = await userModel.findOne({ email }).select('+password');
-
-    if (!user) {
-        console.log('Login failed: User not found for email:', email);
-        return res.status(401).json({ message: 'Invalid email or password' });
-    }
-
-    const isMatch = await user.comparePassword(password);
-
-    if (!isMatch) {
-        console.log('Login failed: Password mismatch for user:', email);
-        return res.status(401).json({ message: 'Invalid email or password' });
-    }
-
-    const token = user.generateAuthToken();
-
-    res.cookie('token', token);
-
-    res.status(200).json({ token, user });
 }
 
 module.exports.getUserProfile = async (req, res, next) => {
-
-    res.status(200).json(req.user);
-
+    try {
+        res.status(200).json(req.user);
+    } catch (err) {
+        next(err);
+    }
 }
 
 module.exports.logoutUser = async (req, res, next) => {
-    res.clearCookie('token');
-    const token = req.cookies.token || req.headers.authorization.split(' ')[1];
+    try {
+        res.clearCookie('token');
+        const token = req.cookies.token || req.headers.authorization.split(' ')[1];
 
-    await blackListTokenModel.create({ token });
+        await blackListTokenModel.create({ token });
 
-    res.status(200).json({ message: 'Logged out' });
+        res.status(200).json({ message: 'Logged out' });
+    } catch (err) {
+        next(err);
+    }
+}
+module.exports.updateProfile = async (req, res, next) => {
+    try {
+        const { fullname, phone, vibeProfile } = req.body;
+        const updates = {};
+        if (fullname) updates.fullname = fullname;
+        if (phone) updates.phone = phone;
+        if (vibeProfile) updates.vibeProfile = vibeProfile;
 
+        const user = await userModel.findByIdAndUpdate(req.user._id, updates, { new: true });
+        res.status(200).json(user);
+    } catch (err) {
+        next(err);
+    }
+};
+
+module.exports.getHistory = async (req, res, next) => {
+    try {
+        const history = await rideService.getRideHistory({
+            userId: req.user._id,
+            userType: 'rider'
+        });
+        res.status(200).json(history);
+    } catch (err) {
+        next(err);
+    }
 }

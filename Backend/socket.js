@@ -29,10 +29,25 @@ const initializeSocket = (server) => {
 
         // --- CAPTAIN EVENTS ---
         socket.on('update-location-captain', async (data) => {
-            const { userId, location } = data;
-            if (!location || !location.ltd || !location.lng) return;
-
+            const { userId, location, rideId, riderId } = data; // Added rideId, riderId
+            if (!location || !location.ltd || !location.lng) {
+                return;
+            }
+            // console.log(`Updating location for captain ${userId}: ${location.ltd}, ${location.lng}`);
             await updateCaptainLocation(userId, location.ltd, location.lng);
+            
+            // Re-emit to the specific Rider
+            if (riderId) {
+                const rider = await userModel.findById(riderId);
+                if (rider && rider.socketId) {
+                    io.to(rider.socketId).emit('captain-location-update', {
+                         lat: location.ltd,
+                         lng: location.lng,
+                         captainId: userId,
+                         rideId: rideId
+                    });
+                }
+            }
         });
 
         socket.on('go-offline', async (data) => {
@@ -51,7 +66,11 @@ const initializeSocket = (server) => {
             try {
                 const { pickup, drop, bid, vibe, userId } = rideData;
                 console.log('Ride Requested:', rideData);
-                await publishToQueue('ride-requests', { ...rideData, socketId: socket.id });
+                
+                // Ensure there is a rideId
+                const rideId = rideData.rideId || rideData._id || new Date().getTime().toString(); 
+                
+                await publishToQueue('ride-requests', { ...rideData, socketId: socket.id, _id: rideId });
             } catch (e) {
                 console.error("Ride Request Error", e);
             }
@@ -90,6 +109,7 @@ const initializeSocket = (server) => {
                 io.to(riderElement.socketId).emit('ride-bid-received', {
                     captainId: data.captainId,
                     amount: data.amount,
+                    rideId: data.rideId,
                     ...data.captainDetails
                 });
             }
@@ -100,16 +120,55 @@ const initializeSocket = (server) => {
             // data: { rideId, captainId, amount }
             console.log('Rider accepted bid:', data);
 
-            const captain = await captainModel.findById(data.captainId);
-            if (captain && captain.socketId) {
-                // Notify Captain
-                io.to(captain.socketId).emit('ride-confirmed', {
-                    rideId: data.rideId,
-                    pickup: data.pickup,
-                    drop: data.drop,
-                    fare: data.amount,
-                    riderDetails: data.riderDetails
-                });
+            try {
+                // 1. Update DB to confirm the ride
+                const ride = await rideModel.findOneAndUpdate({
+                    _id: data.rideId
+                }, {
+                    status: 'accepted',
+                    captain: data.captainId,
+                    'fare.finalFare': data.amount // Store agreed fare? Or update initialBid? Let's assume finalFare/amount
+                }, { new: true });
+
+                if (!ride) {
+                    console.error('Ride not found during accept-bid:', data.rideId);
+                    return;
+                }
+
+                // 2. Fetch full details for Frontend
+                const rideWithDetails = await rideModel.findOne({
+                    _id: data.rideId
+                }).populate('rider').populate('captain').select('+otp');
+
+                // 3. Notify Captain with FULL PAYLOAD
+                if (rideWithDetails.captain && rideWithDetails.captain.socketId) {
+                    
+                    // Simple Flattening for Frontend
+                    const rideForFrontend = {
+                        ...rideWithDetails.toObject(),
+                        pickup: rideWithDetails.pickup.address,
+                        destination: rideWithDetails.drop.address,
+                        fare: data.amount, // Use the accepted amount
+                        user: rideWithDetails.rider // MAPPED
+                    };
+
+                    io.to(rideWithDetails.captain.socketId).emit('ride-confirmed', rideForFrontend);
+                }
+
+                 // 4. Notify Rider (Self-Confirmation)
+                if (rideWithDetails.rider && rideWithDetails.rider.socketId) {
+                     const rideForFrontend = {
+                        ...rideWithDetails.toObject(),
+                        pickup: rideWithDetails.pickup.address,
+                        destination: rideWithDetails.drop.address,
+                        fare: data.amount,
+                        user: rideWithDetails.rider
+                    };
+                    io.to(rideWithDetails.rider.socketId).emit('ride-confirmed', rideForFrontend);
+                }
+
+            } catch (err) {
+                console.error('Error handling accept-bid:', err);
             }
         });
 
@@ -119,6 +178,9 @@ const initializeSocket = (server) => {
     });
 
     // START WORKER TO CONSUME RIDE REQUESTS
+    // Consuming here caused double consumption and errors because pickup is a string, not coords.
+    // Logic is handled in services/captain.service.js instead.
+    /*
     consumeQueue('ride-requests', async (data) => {
         console.log('Worker: Processing ride request', data);
         const { pickup, drop, userId, socketId } = data; // pickup has { lat, lng }
@@ -142,6 +204,7 @@ const initializeSocket = (server) => {
             }
         });
     });
+    */
 };
 
 const sendMessageToSocketId = (socketId, messageObject) => {

@@ -1,5 +1,6 @@
 const axios = require('axios');
 const captainModel = require('../models/captain.model');
+const redisService = require('./redis.service');
 
 module.exports.getAddressCoordinate = async (address) => {
     // Check if address is a coordinate pair "lat, lng"
@@ -11,6 +12,11 @@ module.exports.getAddressCoordinate = async (address) => {
             lng: parseFloat(match[3])
         };
     }
+
+    // Check Cache
+    const cacheKey = `maps:geocode:${address}`;
+    const cached = await redisService.get(cacheKey);
+    if (cached) return cached;
 
     // Using Nominatim API (OpenStreetMap)
     // Note: User-Agent is required by Nominatim's usage policy
@@ -25,13 +31,15 @@ module.exports.getAddressCoordinate = async (address) => {
 
         if (response.data && response.data.length > 0) {
             const location = response.data[0];
-            return {
+            const result = {
                 ltd: parseFloat(location.lat),
                 lng: parseFloat(location.lon)
             };
+            // Cache for 30 days
+            await redisService.set(cacheKey, result, 30 * 24 * 60 * 60);
+            return result;
         } else {
-            console.error('Nominatim returned no results for address:', address);
-            console.error('Nominatim URL:', url);
+            console.warn('Nominatim returned no results for address:', address);
             throw new Error('Unable to fetch coordinates');
         }
     } catch (error) {
@@ -94,11 +102,11 @@ module.exports.getDistanceTime = async (origin, destination) => {
                 }
             };
         } else {
-            throw new Error('Unable to fetch distance and time');
+             throw new Error('Unable to fetch distance and time');
         }
 
     } catch (err) {
-        console.error(err);
+        console.error('OSRM Error:', err.message);
         throw err;
     }
 }
@@ -107,6 +115,11 @@ module.exports.getAutoCompleteSuggestions = async (input) => {
     if (!input) {
         throw new Error('query is required');
     }
+
+    // Check Cache
+    const cacheKey = `maps:autocomplete:${input}`;
+    const cached = await redisService.get(cacheKey);
+    if (cached) return cached;
 
     // Using Nominatim for autocomplete-like suggestions
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(input)}&limit=5`;
@@ -119,7 +132,10 @@ module.exports.getAutoCompleteSuggestions = async (input) => {
         });
         if (response.data) {
             // Map Nominatim results to generic description strings
-            return response.data.map(prediction => prediction.display_name);
+            const suggestions = response.data.map(prediction => prediction.display_name);
+            // Cache for 24 hours
+            await redisService.set(cacheKey, suggestions, 24 * 60 * 60);
+            return suggestions;
         } else {
             throw new Error('Unable to fetch suggestions');
         }
