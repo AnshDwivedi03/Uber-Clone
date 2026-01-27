@@ -613,7 +613,7 @@ Captain clicks "Go Offline"
            Server:
            1. Remove from Redis:
               ZREM 'active-captains' 'captain_001'
-           
+
            2. Update database:
               captainModel.findByIdAndUpdate(
                 'captain_001',
@@ -628,7 +628,7 @@ User requests ride at location: 37.79, -122.40
         │
         ▼
 Captain Service runs:
-        
+
         ├─ mapService.getAddressCoordinate('pickup address')
         │  └─ Returns pickup coordinates: 37.7899, -122.3993
         │
@@ -649,13 +649,13 @@ WHY REDIS FOR LOCATIONS?
 ─────────────────────────
 
 MongoDB would work but:
-  ✗ Query: db.captains.find({ 
-      "location": { $near: [37.7899, -122.3993], $maxDistance: 5000 } 
+  ✗ Query: db.captains.find({
+      "location": { $near: [37.7899, -122.3993], $maxDistance: 5000 }
     })
   ✗ Takes: 100-500ms (too slow for real-time)
 
 Redis GEO commands:
-  ✓ Query: GEOSEARCH 'active-captains' ... 
+  ✓ Query: GEOSEARCH 'active-captains' ...
   ✓ Takes: 1-5ms (1000x faster!)
   ✓ Optimized for geographic data
   ✓ Perfect for finding nearby items
@@ -674,8 +674,8 @@ GEOADD active-captains -122.3993 37.7899 captain_001
 GEOADD active-captains -122.5000 37.8000 captain_002
        └─ Stores another captain
 
-GEOSEARCH active-captains 
-  FROMMEMBER 37.7899 -122.3993 
+GEOSEARCH active-captains
+  FROMMEMBER 37.7899 -122.3993
   BYRADIUS 5 km
        └─ Finds all captains within 5km
 

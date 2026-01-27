@@ -7,6 +7,7 @@
 ## 📍 START HERE
 
 **Read this first (5 minutes):**
+
 ```
 Your entire backend has 4 main components working together:
 
@@ -34,7 +35,7 @@ PLUS: Socket.io for real-time communication
 **Tell interviewer this:**
 
 > "When the server starts, here's what happens:
-> 
+>
 > 1. Load environment variables from .env file
 > 2. Connect to MongoDB
 > 3. Connect to Redis
@@ -42,15 +43,16 @@ PLUS: Socket.io for real-time communication
 > 5. Attach Socket.io to server
 > 6. Subscribe to ride request queue
 > 7. Server listening on port 3000
-> 
+>
 > Total time: ~500ms, then ready for requests"
 
 **Code snapshot:**
+
 ```javascript
 // server.js
-connectToRabbitMQ();    // Background
-connectToRedis();       // Background
-server.listen(3000);    // Ready!
+connectToRabbitMQ(); // Background
+connectToRedis(); // Background
+server.listen(3000); // Ready!
 captainService.subscribeToRideRequests(); // Listening
 ```
 
@@ -106,7 +108,7 @@ STEP 1: User requests
 
 STEP 2: Server publishes to RabbitMQ
   └─ Message queued and stored durably
-  
+
 STEP 3: Captain Service consumes message
   ├─ Convert pickup address to coordinates (Nominatim API)
   │  └─ "123 Main St" → {lat: 37.7899, lng: -122.3993}
@@ -128,6 +130,7 @@ RESULT: Captains see notification! 🔔
 ```
 
 **Key question: Why Redis and not MongoDB?**
+
 > "Redis is 1000x faster for geospatial queries because it's optimized for GEO commands. MongoDB is for persistent data, Redis is for real-time data. For finding nearby captains instantly, Redis is essential."
 
 ---
@@ -266,21 +269,23 @@ Fare = 30 + (2.5 × 10) + (8 × 2)
 ## 🔄 WEBSOCKET EVENTS (Reference)
 
 **User Events:**
+
 ```javascript
-socket.emit('join', {userId, userType})           // Register
-socket.emit('ride-request', rideData)             // Request ride
-socket.emit('update-location-captain', location) // Send GPS
-socket.emit('captain-accept-ride', data)         // Accept
-socket.emit('go-online', {userId})               // Go online
-socket.emit('go-offline', {userId})              // Go offline
+socket.emit("join", { userId, userType }); // Register
+socket.emit("ride-request", rideData); // Request ride
+socket.emit("update-location-captain", location); // Send GPS
+socket.emit("captain-accept-ride", data); // Accept
+socket.emit("go-online", { userId }); // Go online
+socket.emit("go-offline", { userId }); // Go offline
 ```
 
 **Server Events:**
+
 ```javascript
-socket.emit('new-ride', rideData)               // New ride available
-socket.emit('ride-confirmed', {otp, captain})  // Ride confirmed
-socket.emit('ride-started', data)              // Ride started
-socket.emit('ride-completed', {fare})          // Ride ended
+socket.emit("new-ride", rideData); // New ride available
+socket.emit("ride-confirmed", { otp, captain }); // Ride confirmed
+socket.emit("ride-started", data); // Ride started
+socket.emit("ride-completed", { fare }); // Ride ended
 ```
 
 ---
@@ -314,45 +319,54 @@ RABBITMQ (Async Queue)
 
 ## 🎯 WHY EACH TECHNOLOGY
 
-| Tech | Why |
-|------|-----|
-| **Express.js** | Fast, minimal web framework perfect for APIs |
-| **MongoDB** | Flexible NoSQL, JSON-like documents |
-| **Redis** | 1000x faster for geospatial queries |
-| **RabbitMQ** | Reliable message queue, async processing |
-| **Socket.io** | Real-time bidirectional communication |
-| **JWT** | Stateless authentication, scales horizontally |
-| **Bcrypt** | Secure password hashing (one-way, slow by design) |
+| Tech           | Why                                               |
+| -------------- | ------------------------------------------------- |
+| **Express.js** | Fast, minimal web framework perfect for APIs      |
+| **MongoDB**    | Flexible NoSQL, JSON-like documents               |
+| **Redis**      | 1000x faster for geospatial queries               |
+| **RabbitMQ**   | Reliable message queue, async processing          |
+| **Socket.io**  | Real-time bidirectional communication             |
+| **JWT**        | Stateless authentication, scales horizontally     |
+| **Bcrypt**     | Secure password hashing (one-way, slow by design) |
 
 ---
 
 ## 🎓 ANSWERS TO TOUGH QUESTIONS
 
 **Q: "Why 3 databases?"**
+
 > "Each database is optimized for different use cases:
+>
 > - MongoDB: Persistent user data, good for CRUD
 > - Redis: Real-time location data, optimized for geographic queries
 > - RabbitMQ: Message queue, ensures reliability and async processing"
 
 **Q: "What if captain loses internet?"**
+
 > "Socket.io auto-reconnects. If ride is ongoing, it continues. The OTP verification happens when captain arrives, so offline time doesn't break the ride flow."
 
 **Q: "How do you handle 1 million concurrent requests?"**
+
 > "Horizontal scaling:
+>
 > - Load balance multiple Express servers
 > - MongoDB sharding for data
 > - Redis cluster for caching
 > - Multiple RabbitMQ brokers"
 
 **Q: "Why not use HTTP polling instead of WebSocket?"**
+
 > "WebSocket is persistent connection, much more efficient. HTTP polling would:
+>
 > - Create new connection every second
 > - Use 1000x more bandwidth
 > - Add latency
-> WebSocket gives real-time updates instantly"
+>   WebSocket gives real-time updates instantly"
 
 **Q: "What about security?"**
+
 > "We implement:
+>
 > - Bcrypt: Password hashing (irreversible)
 > - JWT: Stateless auth tokens
 > - Token blacklist: On logout, token can't be used again
@@ -398,6 +412,7 @@ If asked to demo your code:
 ## 📋 PREPARATION CHECKLIST
 
 Before interview:
+
 - [ ] Understand why each database is used
 - [ ] Can explain ride request flow in 2 minutes
 - [ ] Know what bcrypt, JWT, Socket.io do
@@ -417,7 +432,7 @@ Before interview:
 ✅ **Be ready with examples** - "For instance, when user requests..."  
 ✅ **Show confidence** - You built this! You know it!  
 ✅ **If stuck** - "Let me trace through the code..."  
-✅ **Answer follow-ups** - "That's a great question..."  
+✅ **Answer follow-ups** - "That's a great question..."
 
 ---
 
@@ -428,13 +443,14 @@ You have:
 ✅ Understanding of all technologies  
 ✅ Real-time features  
 ✅ Security implementation  
-✅ Complete documentation  
+✅ Complete documentation
 
 **Go crush that interview! 💪**
 
 ---
 
 **Last reminder:** Read these files in this order for maximum preparation:
+
 1. START_HERE.md (this file)
 2. QUICK_CHEAT_SHEET.md (30 min)
 3. VISUAL_FLOW_DIAGRAMS.md (30 min)
