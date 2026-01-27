@@ -124,6 +124,14 @@ const UserSignup = () => {
               <input
                 required
                 className="bg-zinc-900 w-full rounded-xl px-4 py-3 border border-zinc-700 placeholder:text-zinc-500 focus:border-brand-primary focus:outline-none transition-colors mb-4"
+                type="email"
+                placeholder="email@example.com"
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); setError(null); }}
+              />
+              <input
+                required
+                className="bg-zinc-900 w-full rounded-xl px-4 py-3 border border-zinc-700 placeholder:text-zinc-500 focus:border-brand-primary focus:outline-none transition-colors mb-4"
                 type="tel"
                 placeholder="Phone Number"
                 value={phone}
