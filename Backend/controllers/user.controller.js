@@ -7,6 +7,7 @@ module.exports.registerUser = async (req, res, next) => {
 
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+        console.log('Validation errors:', errors.array());
         return res.status(400).json({ errors: errors.array() });
     }
 
@@ -46,12 +47,14 @@ module.exports.loginUser = async (req, res, next) => {
     const user = await userModel.findOne({ email }).select('+password');
 
     if (!user) {
+        console.log('Login failed: User not found for email:', email);
         return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     const isMatch = await user.comparePassword(password);
 
     if (!isMatch) {
+        console.log('Login failed: Password mismatch for user:', email);
         return res.status(401).json({ message: 'Invalid email or password' });
     }
 
@@ -70,7 +73,7 @@ module.exports.getUserProfile = async (req, res, next) => {
 
 module.exports.logoutUser = async (req, res, next) => {
     res.clearCookie('token');
-    const token = req.cookies.token || req.headers.authorization.split(' ')[ 1 ];
+    const token = req.cookies.token || req.headers.authorization.split(' ')[1];
 
     await blackListTokenModel.create({ token });
 

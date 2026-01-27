@@ -12,29 +12,15 @@ module.exports.createRide = async (req, res) => {
     }
 
     const { userId, pickup, destination, vehicleType } = req.body;
+    console.log('createRide called. req.user:', req.user);
 
     try {
         const ride = await rideService.createRide({ user: req.user._id, pickup, destination, vehicleType });
         res.status(201).json(ride);
 
-        const pickupCoordinates = await mapService.getAddressCoordinate(pickup);
-
-
-
-        const captainsInRadius = await mapService.getCaptainsInTheRadius(pickupCoordinates.ltd, pickupCoordinates.lng, 2);
-
-        ride.otp = ""
-
         const rideWithUser = await rideModel.findOne({ _id: ride._id }).populate('user');
 
-        captainsInRadius.map(captain => {
-
-            sendMessageToSocketId(captain.socketId, {
-                event: 'new-ride',
-                data: rideWithUser
-            })
-
-        })
+        // Notification is now handled by the distributed Captain Service via RabbitMQ
 
     } catch (err) {
 
@@ -69,6 +55,17 @@ module.exports.confirmRide = async (req, res) => {
     const { rideId } = req.body;
 
     try {
+        // Delegating to Captain Service for distributed flow
+        const captainService = require('../services/captain.service');
+        const result = await captainService.confirmRide({ rideId, captainId: req.captain._id });
+
+        // Since it's async now, we return a processing status or wait?
+        // For better UX, we might want to wait for the DB update or just return OK.
+        // Returning OK and letting Socket handle the UI update is standard for async.
+        return res.status(200).json(result);
+
+        /* 
+        // Original Logic moved to async consumer
         const ride = await rideService.confirmRide({ rideId, captain: req.captain });
 
         sendMessageToSocketId(ride.user.socketId, {
@@ -77,6 +74,7 @@ module.exports.confirmRide = async (req, res) => {
         })
 
         return res.status(200).json(ride);
+        */
     } catch (err) {
 
         console.log(err);
@@ -129,5 +127,5 @@ module.exports.endRide = async (req, res) => {
         return res.status(200).json(ride);
     } catch (err) {
         return res.status(500).json({ message: err.message });
-    } 
+    }
 }

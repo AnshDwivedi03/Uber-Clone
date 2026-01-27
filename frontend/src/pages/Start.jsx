@@ -1,15 +1,28 @@
-
 import React from 'react'
 import { Link } from 'react-router-dom'
+import LivingMap from '../components/LivingMap'
 
 const Start = () => {
   return (
-    <div>
-      <div className='bg-cover bg-center bg-[url(https://images.unsplash.com/photo-1619059558110-c45be64b73ae?q=80&w=2574&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D)] h-screen pt-8 flex justify-between flex-col w-full'>
-        <img className='w-16 ml-8' src="https://cdn-assets-eu.frontify.com/s3/frontify-enterprise-files-eu/eyJwYXRoIjoid2VhcmVcL2ZpbGVcLzhGbTh4cU5SZGZUVjUxYVh3bnEyLnN2ZyJ9:weare:F1cOF9Bps96cMy7r9Y2d7affBYsDeiDoIHfqZrbcxAw?width=1200&height=417" alt="" />
-        <div className='bg-white pb-8 py-4 px-4'>
-          <h2 className='text-[30px] font-semibold'>Get Started with Uber</h2>
-          <Link to='/login' className='flex items-center justify-center w-full bg-black text-white py-3 rounded-lg mt-5'>Continue</Link>
+    <div className="relative z-10 h-screen flex flex-col items-center justify-center p-8 text-center bg-black/40 backdrop-blur-sm overflow-hidden text-white font-sans">
+      <LivingMap active={true} />
+      <div className="relative z-10 flex flex-col items-center max-w-md w-full">
+        <div className="w-24 h-24 bg-lime-400 rounded-3xl rotate-3 flex items-center justify-center mb-8 shadow-2xl shadow-lime-400/40 transform hover:rotate-6 transition-transform duration-500">
+          <span className="text-5xl font-black italic text-black -rotate-3">S</span>
+        </div>
+        <h1 className="text-5xl font-black tracking-tighter mb-2 italic">SKRRRT.</h1>
+        <p className="text-xl text-zinc-300 font-medium mb-12">Your Vibe. Your Ride.</p>
+
+        <div className="w-full space-y-4">
+          <Link to='/login' className="block w-full text-lg py-4 bg-white text-black font-bold rounded-2xl hover:bg-zinc-200 shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all transform hover:scale-[1.02]">
+            I'm a Rider
+          </Link>
+          <Link to='/captain-login' className="block w-full text-lg py-4 border-2 border-zinc-600 text-zinc-200 font-bold rounded-2xl hover:bg-zinc-900 transition-all hover:border-zinc-500">
+            I'm a Captain
+          </Link>
+        </div>
+        <div className="mt-12 text-xs text-zinc-500 uppercase tracking-widest font-bold">
+          Made for India 🇮🇳
         </div>
       </div>
     </div>

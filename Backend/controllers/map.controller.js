@@ -19,6 +19,22 @@ module.exports.getCoordinates = async (req, res, next) => {
     }
 }
 
+module.exports.getAddress = async (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { lat, lng } = req.query;
+
+    try {
+        const address = await mapService.getAddressFromCoordinates(lat, lng);
+        res.status(200).json({ address });
+    } catch (error) {
+        res.status(404).json({ message: 'Address not found' });
+    }
+}
+
 module.exports.getDistanceTime = async (req, res, next) => {
 
     try {
@@ -54,6 +70,26 @@ module.exports.getAutoCompleteSuggestions = async (req, res, next) => {
         const suggestions = await mapService.getAutoCompleteSuggestions(input);
 
         res.status(200).json(suggestions);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+module.exports.getRoute = async (req, res, next) => {
+
+    try {
+
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
+        const { origin, destination } = req.query;
+
+        const route = await mapService.getRoute(origin, destination);
+
+        res.status(200).json(route);
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Internal server error' });

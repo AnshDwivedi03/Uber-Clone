@@ -1,28 +1,43 @@
-
-import React, { createContext, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 
 export const SocketContext = createContext();
 
-const socket = io(`${import.meta.env.VITE_BASE_URL}`); // Replace with your server URL
+export const useSocket = () => {
+    return useContext(SocketContext);
+};
 
-const SocketProvider = ({ children }) => {
+export const SocketProvider = ({ children }) => {
+    const [socket, setSocket] = useState(null);
+
     useEffect(() => {
-        // Basic connection logic
-        socket.on('connect', () => {
-            console.log(`Client connected: ${socket.id}`);
+        // Connect to the server
+        const newSocket = io(import.meta.env.VITE_BASE_URL || 'http://localhost:3000'); // Use VITE env or default
+
+        setSocket(newSocket);
+
+        newSocket.on('connect', () => {
+            console.log('Connected to socket server:', newSocket.id);
         });
 
-        socket.on('disconnect', () => {
-            console.log('Disconnected from server');
+        newSocket.on('disconnect', () => {
+            console.log('Disconnected from socket server');
         });
 
+        return () => {
+            newSocket.disconnect();
+        };
     }, []);
 
-
+    // Helper to join room/identify user
+    const joinIdentity = (userId, userType) => {
+        if (socket) {
+            socket.emit('join', { userId, userType });
+        }
+    }
 
     return (
-        <SocketContext.Provider value={{ socket }}>
+        <SocketContext.Provider value={{ socket, joinIdentity }}>
             {children}
         </SocketContext.Provider>
     );

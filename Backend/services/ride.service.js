@@ -65,13 +65,22 @@ module.exports.createRide = async ({
 
 
 
-    const ride = rideModel.create({
+    const ride = await rideModel.create({
         user,
         pickup,
         destination,
         otp: getOtp(6),
-        fare: fare[ vehicleType ]
+        fare: fare[vehicleType]
     })
+
+    // Publish to RabbitMQ
+    const rabbitMQ = require('./rabbitmq.service');
+
+    // We need to populate the user details for the frontend to display them
+    const rideWithUser = await rideModel.findOne({ _id: ride._id }).populate('user');
+    console.log('Publishing ride to RabbitMQ:', JSON.stringify(rideWithUser, null, 2));
+
+    await rabbitMQ.publishToQueue('ride-requests', rideWithUser);
 
     return ride;
 }
@@ -157,5 +166,62 @@ module.exports.endRide = async ({ rideId, captain }) => {
     })
 
     return ride;
+}
+
+// Subscribe to Ride Accepted Events
+module.exports.subscribeToRideAccepted = async () => {
+    const rabbitMQ = require('./rabbitmq.service');
+    const { sendMessageToSocketId } = require('../socket'); // check path?
+
+    await rabbitMQ.consumeQueue('ride-accepted', async (data) => {
+        console.log('Processing ride acceptance:', data);
+        const { rideId, captainId } = data;
+
+        try {
+            const ride = await rideModel.findOne({ _id: rideId });
+            if (!ride || ride.status !== 'pending') {
+                // Might have been accepted already if lock failed or logic split
+                console.log('Ride not available or already accepted');
+                return;
+            }
+
+            // Update DB
+            await rideModel.findOneAndUpdate({
+                _id: rideId
+            }, {
+                status: 'accepted',
+                captain: captainId
+            })
+
+            const rideWithDetails = await rideModel.findOne({
+                _id: rideId
+            }).populate('user').populate('captain').select('+otp');
+
+            // Notify User
+            if (rideWithDetails.user && rideWithDetails.user.socketId) {
+                console.log(`Sending ride-confirmed to user ${rideWithDetails.user._id} at socket ${rideWithDetails.user.socketId}`);
+                console.log('Ride details sent to user (OTP check):', rideWithDetails.otp);
+                // console.log('Full ride details:', JSON.stringify(rideWithDetails, null, 2));
+                sendMessageToSocketId(rideWithDetails.user.socketId, {
+                    event: 'ride-confirmed',
+                    data: rideWithDetails
+                });
+            } else {
+                console.log('User socketId not found for ride:', rideId);
+            }
+
+            // Notify Captain? (The one who accepted)
+            if (rideWithDetails.captain && rideWithDetails.captain.socketId) {
+                console.log(`Sending ride-confirmed to captain ${rideWithDetails.captain._id} at socket ${rideWithDetails.captain.socketId}`);
+                sendMessageToSocketId(rideWithDetails.captain.socketId, {
+                    event: 'ride-confirmed',
+                    data: rideWithDetails
+                });
+            }
+
+        } catch (error) {
+            console.error('Error processing ride acceptance:', error);
+        }
+    });
 }
 

@@ -1,4 +1,4 @@
-import React, { useContext } from 'react'
+import React from 'react'
 import { Route, Routes } from 'react-router-dom'
 import Start from './pages/Start'
 import UserLogin from './pages/UserLogin'
@@ -13,6 +13,12 @@ import CaptainProtectWrapper from './pages/CaptainProtectWrapper'
 import CaptainLogout from './pages/CaptainLogout'
 import Riding from './pages/Riding'
 import CaptainRiding from './pages/CaptainRiding'
+import UserProfile from './pages/UserProfile'
+import UserHistory from './pages/UserHistory'
+import UserPayment from './pages/UserPayment'
+import CaptainProfile from './pages/CaptainProfile'
+import CaptainHistory from './pages/CaptainHistory'
+import CaptainPayment from './pages/CaptainPayment'
 import 'remixicon/fonts/remixicon.css'
 
 const App = () => {
@@ -50,6 +56,17 @@ const App = () => {
             <CaptainLogout />
           </CaptainProtectWrapper>
         } />
+
+        {/* User Features Routes */}
+        <Route path='/user/profile' element={<UserProtectWrapper><UserProfile /></UserProtectWrapper>} />
+        <Route path='/user/history' element={<UserProtectWrapper><UserHistory /></UserProtectWrapper>} />
+        <Route path='/user/payment' element={<UserProtectWrapper><UserPayment /></UserProtectWrapper>} />
+
+        {/* Captain Features Routes */}
+        <Route path='/captain/profile' element={<CaptainProtectWrapper><CaptainProfile /></CaptainProtectWrapper>} />
+        <Route path='/captain/history' element={<CaptainProtectWrapper><CaptainHistory /></CaptainProtectWrapper>} />
+        <Route path='/captain/payment' element={<CaptainProtectWrapper><CaptainPayment /></CaptainProtectWrapper>} />
+
       </Routes>
     </div>
   )

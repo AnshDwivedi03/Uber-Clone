@@ -1,0 +1,47 @@
+config:
+  target: "http://localhost:4000"
+  phases:
+    - duration: 60
+      arrivalRate: 5
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+scenarios:
+  - name: "User registration, login, and profile fetch"
+    flow:
+      - function: "generateEmail"
+      - post:
+          url: "/users/register"
+          json:
+            fullname:
+              firstname: "Test"
+              lastname: "User"
+            email: "{{ email }}"
+            password: "password123"
+          capture:
+            - json: "$.token"
+              as: "regToken"
+
+      - post:
+          url: "/users/login"
+          json:
+            email: "{{ email }}"
+            password: "password123"
+          capture:
+            - json: "$.token"
+              as: "loginToken"
+
+      - get:
+          url: "/users/profile"
+          headers:
+            Authorization: "Bearer {{ loginToken }}"
+
+# Custom JS function for dynamic data
+processor:
+  generateEmail: |
+    function(userContext, events, done) {
+      const uniqueEmail = `test_${Date.now()}@example.com`;
+      userContext.vars.email = uniqueEmail;
+      return done();
+    }

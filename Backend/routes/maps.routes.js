@@ -24,5 +24,20 @@ router.get('/get-suggestions',
 )
 
 
+router.get('/get-route',
+    query('origin').isString().isLength({ min: 3 }),
+    query('destination').isString().isLength({ min: 3 }),
+    authMiddleware.authUser,
+    mapController.getRoute
+)
+
+router.get('/get-address',
+    query('lat').isFloat({ min: -90, max: 90 }),
+    query('lng').isFloat({ min: -180, max: 180 }),
+    authMiddleware.authUser,
+    mapController.getAddress
+)
+
+
 
 module.exports = router;

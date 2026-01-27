@@ -1,44 +1,49 @@
 const mongoose = require('mongoose');
 
-
 const rideSchema = new mongoose.Schema({
-    user: {
+    rider: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'user',
         required: true
     },
     captain: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'captain',
+        ref: 'captain'
     },
-    pickup: {
-        type: String,
-        required: true,
-    },
-    destination: {
-        type: String,
-        required: true,
-    },
-    fare: {
-        type: Number,
-        required: true,
-    },
-
     status: {
         type: String,
-        enum: [ 'pending', 'accepted', "ongoing", 'completed', 'cancelled' ],
-        default: 'pending',
+        enum: ['requested', 'bidding', 'accepted', 'ongoing', 'completed', 'cancelled'],
+        default: 'requested'
     },
-
-    duration: {
-        type: Number,
-    }, // in seconds
-
-    distance: {
-        type: Number,
-    }, // in meters
-
-    paymentID: {
+    pickup: {
+        address: { type: String, required: true },
+        coordinates: {
+            type: [Number], // [lng, lat]
+            required: true
+        }
+    },
+    drop: {
+        address: { type: String, required: true },
+        coordinates: {
+            type: [Number], // [lng, lat]
+            required: true
+        }
+    },
+    fare: {
+        initialBid: { type: Number, required: true },
+        finalFare: { type: Number },
+        currency: { type: String, default: 'INR' }
+    },
+    vibe: {
+        music: { type: Boolean, default: false },
+        quiet: { type: Boolean, default: false },
+        ac: { type: Boolean, default: false }
+    },
+    otp: {
+        type: String,
+        select: false
+    },
+    paymentId: {
         type: String,
     },
     orderId: {
@@ -47,12 +52,15 @@ const rideSchema = new mongoose.Schema({
     signature: {
         type: String,
     },
-
-    otp: {
-        type: String,
-        select: false,
-        required: true,
+    distance: {
+        type: Number // in meters or km
     },
-})
+    duration: {
+        type: Number // in seconds or minutes
+    },
+    routePolyline: {
+        type: String
+    }
+}, { timestamps: true });
 
 module.exports = mongoose.model('ride', rideSchema);

@@ -1,68 +1,259 @@
-import React, { useState, useEffect } from 'react'
-import { LoadScript, GoogleMap, Marker } from '@react-google-maps/api'
+import React, { useState, useEffect, useRef } from 'react'
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet'
+import 'leaflet/dist/leaflet.css'
+import L from 'leaflet'
+import axios from 'axios'
+import { MapPin, Navigation } from 'lucide-react'
 
-const containerStyle = {
-    width: '100%',
-    height: '100%',
+// Custom Marker Icons
+const userIcon = L.divIcon({
+    html: `<div class="relative w-8 h-8 bg-lime-400 rounded-full border-4 border-black flex items-center justify-center shadow-lg"><div class="w-2 h-2 bg-black rounded-full"></div></div>`,
+    className: 'custom-marker',
+    iconSize: [32, 32],
+    iconAnchor: [16, 16]
+});
+
+const driverIcon = L.divIcon({
+    html: `<div class="relative w-10 h-10"><img src="https://cdn-icons-png.flaticon.com/512/3097/3097180.png" class="w-full h-full drop-shadow-lg" /></div>`, // Car icon
+    className: 'custom-marker',
+    iconSize: [40, 40],
+    iconAnchor: [20, 20]
+});
+
+const pickupIcon = L.divIcon({
+    html: `<div class="w-8 h-8 flex items-center justify-center bg-black text-lime-400 rounded-full border-2 border-lime-400 font-bold shadow-lg"><span class="text-xs">P</span></div>`,
+    className: 'custom-marker',
+    iconSize: [32, 32],
+    iconAnchor: [16, 32]
+});
+
+const destIcon = L.divIcon({
+    html: `<div class="w-8 h-8 flex items-center justify-center bg-black text-white rounded-full border-2 border-white font-bold shadow-lg"><span class="text-xs">D</span></div>`,
+    className: 'custom-marker',
+    iconSize: [32, 32],
+    iconAnchor: [16, 32]
+});
+
+const defaultCenter = {
+    lat: 28.6139,
+    lng: 77.2090
 };
 
-const center = {
-    lat: -3.745,
-    lng: -38.523
-};
+// Component to handle map interaction (center updates)
+const MapController = ({ onCenterChange, isSelecting, bounds, center }) => {
+    const map = useMap();
 
-const LiveTracking = () => {
-    const [ currentPosition, setCurrentPosition ] = useState(center);
-
+    // Fly to center if provided and not selecting
     useEffect(() => {
-        navigator.geolocation.getCurrentPosition((position) => {
-            const { latitude, longitude } = position.coords;
-            setCurrentPosition({
-                lat: latitude,
-                lng: longitude
-            });
-        });
+        if (center && !isSelecting) {
+            const targetLat = center.lat || center.ltd;
+            const targetLng = center.lng;
 
-        const watchId = navigator.geolocation.watchPosition((position) => {
+            if (targetLat != null && targetLng != null) {
+                map.flyTo({ lat: targetLat, lng: targetLng }, 15, {
+                    animate: true,
+                    duration: 1.5
+                });
+            }
+        }
+    }, [center, isSelecting, map]);
+
+    // Fit bounds if provided
+    useEffect(() => {
+        if (bounds && bounds.length > 0 && !isSelecting) {
+            map.fitBounds(bounds, { padding: [50, 50] });
+        }
+    }, [bounds, map, isSelecting]);
+
+    useMapEvents({
+        moveend: () => {
+            if (isSelecting && onCenterChange) {
+                const center = map.getCenter();
+                onCenterChange({ lat: center.lat, lng: center.lng });
+            }
+        }
+    });
+
+    return null;
+}
+
+const LiveTracking = ({ pickup, destination, driverLocation, isSelecting, onLocationSelect }) => {
+    const [currentPosition, setCurrentPosition] = useState(defaultCenter);
+    const [routePath, setRoutePath] = useState([]);
+    const [pickupCoords, setPickupCoords] = useState(null);
+    const [destinationCoords, setDestinationCoords] = useState(null);
+    const [mapCenter, setMapCenter] = useState(defaultCenter);
+
+    // Track User Location
+    useEffect(() => {
+        if (!navigator.geolocation) {
+            console.log('Geolocation is not supported by your browser');
+            return;
+        }
+
+        const updatePosition = (position) => {
             const { latitude, longitude } = position.coords;
-            setCurrentPosition({
-                lat: latitude,
-                lng: longitude
-            });
+            const pos = { lat: latitude, lng: longitude };
+            setCurrentPosition(pos);
+
+            // Auto-center on user if no active route and not selecting
+            // This ensures "current location" stays in view for riders/captains when idle
+            if (!pickup && !destination && !isSelecting && !driverLocation) {
+                setMapCenter(pos);
+            }
+        };
+
+        const error = (err) => console.log('Location error:', err);
+
+        // Initial fetch
+        navigator.geolocation.getCurrentPosition(updatePosition, error);
+
+        // Continuous watch
+        const watchId = navigator.geolocation.watchPosition(updatePosition, error, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
         });
 
         return () => navigator.geolocation.clearWatch(watchId);
-    }, []);
+    }, [pickup, destination, isSelecting, driverLocation]); // Re-evaluate if tracking needs change
+
+    // Auto-center on driver location if provided (e.g. Captain Home)
+    useEffect(() => {
+        if (driverLocation && !isSelecting) {
+            setMapCenter(driverLocation);
+        }
+    }, [driverLocation, isSelecting]);
+
+    const getCoords = async (location) => {
+        if (!location) return null;
+        if (typeof location === 'string') {
+            try {
+                const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-coordinates`, {
+                    params: { address: location },
+                    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                });
+                return response.data;
+            } catch (error) {
+                console.error("Error fetching coordinates:", error);
+                return null;
+            }
+        }
+        return location;
+    };
 
     useEffect(() => {
-        const updatePosition = () => {
-            navigator.geolocation.getCurrentPosition((position) => {
-                const { latitude, longitude } = position.coords;
+        const fetchRoute = async () => {
+            if (isSelecting) {
+                setRoutePath([]);
+                return;
+            }
 
-                console.log('Position updated:', latitude, longitude);
-                setCurrentPosition({
-                    lat: latitude,
-                    lng: longitude
+            if (!pickup || !destination) {
+                setRoutePath([]);
+                // If only pickup is set, show marker?
+                if (pickup) {
+                    const pCoords = await getCoords(pickup);
+                    setPickupCoords(pCoords);
+                    if (pCoords && !destination) setMapCenter(pCoords); // Center on pickup if only pickup
+                }
+                return;
+            }
+
+            try {
+                const pCoords = await getCoords(pickup);
+                const dCoords = await getCoords(destination);
+
+                setPickupCoords(pCoords);
+                setDestinationCoords(dCoords);
+
+                if (!pCoords || !dCoords) return;
+
+                const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-route`, {
+                    params: {
+                        origin: typeof pickup === 'string' ? pickup : `${pickup.lat},${pickup.lng}`,
+                        destination: typeof destination === 'string' ? destination : `${destination.lat},${destination.lng}`
+                    },
+                    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
                 });
-            });
+
+                if (response.data && response.data.coordinates) {
+                    const path = response.data.coordinates.map(coord => [coord[1], coord[0]]);
+                    setRoutePath(path);
+                    // MapController will fit bounds automatically via `bounds` prop
+                }
+            } catch (error) {
+                console.error("Error fetching route:", error);
+            }
         };
 
-        updatePosition(); // Initial position update
-
-        const intervalId = setInterval(updatePosition, 1000); // Update every 10 seconds
-
-    }, []);
+        fetchRoute();
+    }, [pickup, destination, isSelecting]);
 
     return (
-        <LoadScript googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
-            <GoogleMap
-                mapContainerStyle={containerStyle}
-                center={currentPosition}
+        <div className="w-full h-full relative z-0">
+            <MapContainer
+                center={defaultCenter} // Initial static center, MapController handles dynamic updates
                 zoom={15}
+                className="w-full h-full"
+                zoomControl={false}
             >
-                <Marker position={currentPosition} />
-            </GoogleMap>
-        </LoadScript>
+                {/* Dark Mode Tiles */}
+                <TileLayer
+                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                    attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
+                />
+
+                <MapController
+                    onCenterChange={onLocationSelect}
+                    isSelecting={isSelecting}
+                    bounds={routePath}
+                    center={mapCenter}
+                />
+
+                {/* User Current Position */}
+                {!isSelecting && currentPosition && (
+                    <Marker position={currentPosition} icon={userIcon}>
+                        <Popup>You</Popup>
+                    </Marker>
+                )}
+
+                {/* Pickup Marker */}
+                {pickupCoords && !isSelecting && (
+                    <Marker position={[pickupCoords.ltd || pickupCoords.lat, pickupCoords.lng]} icon={pickupIcon}>
+                        <Popup>Pickup Location</Popup>
+                    </Marker>
+                )}
+
+                {/* Destination Marker */}
+                {destinationCoords && !isSelecting && (
+                    <Marker position={[destinationCoords.ltd || destinationCoords.lat, destinationCoords.lng]} icon={destIcon}>
+                        <Popup>Drop Location</Popup>
+                    </Marker>
+                )}
+
+                {/* Driver Marker */}
+                {driverLocation && (
+                    <Marker position={[driverLocation.lat, driverLocation.lng]} icon={driverIcon} />
+                )}
+
+                {/* Route Polyline - Lime Color */}
+                {routePath.length > 0 && !isSelecting && (
+                    <Polyline positions={routePath} color="#84cc16" weight={5} opacity={0.8} />
+                )}
+
+            </MapContainer>
+
+            {/* Selection Overlay */}
+            {isSelecting && (
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[1000] pointer-events-none">
+                    <div className="relative">
+                        <MapPin size={40} className="text-lime-400 drop-shadow-xl animate-bounce-slow" fill="black" />
+                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4 h-1 bg-black/50 blur-sm rounded-full"></div>
+                    </div>
+                </div>
+            )}
+        </div>
     )
 }
 

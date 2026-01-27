@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 
 function connectToDb() {
+    console.log("Connecting to DB with:", process.env.DB_CONNECT);
     mongoose.connect(process.env.DB_CONNECT
     ).then(() => {
         console.log('Connected to DB');
