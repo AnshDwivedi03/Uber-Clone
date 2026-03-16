@@ -15,6 +15,7 @@ module.exports.getCoordinates = async (req, res, next) => {
         const coordinates = await mapService.getAddressCoordinate(address);
         res.status(200).json(coordinates);
     } catch (error) {
+        console.error('getCoordinates Error:', error.message);
         res.status(404).json({ message: 'Coordinates not found' });
     }
 }
@@ -31,7 +32,8 @@ module.exports.getAddress = async (req, res, next) => {
         const address = await mapService.getAddressFromCoordinates(lat, lng);
         res.status(200).json({ address });
     } catch (error) {
-        res.status(404).json({ message: 'Address not found' });
+        console.error('getAddress Error:', error.message);
+        res.status(error.message === 'Unable to fetch address' ? 404 : 500).json({ message: error.message });
     }
 }
 

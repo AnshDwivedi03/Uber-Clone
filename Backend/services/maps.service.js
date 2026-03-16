@@ -49,6 +49,13 @@ module.exports.getAddressCoordinate = async (address) => {
 }
 
 module.exports.getAddressFromCoordinates = async (lat, lng) => {
+    if (!lat || !lng) throw new Error('Latitude and longitude are required');
+
+    // Check Cache
+    const cacheKey = `maps:rev_geocode:${lat}:${lng}`;
+    const cached = await redisService.get(cacheKey);
+    if (cached) return cached;
+
     const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
 
     try {
@@ -59,7 +66,10 @@ module.exports.getAddressFromCoordinates = async (lat, lng) => {
         });
 
         if (response.data && response.data.display_name) {
-            return response.data.display_name;
+            const address = response.data.display_name;
+            // Cache for 30 days
+            await redisService.set(cacheKey, address, 30 * 24 * 60 * 60);
+            return address;
         } else {
             throw new Error('Unable to fetch address');
         }
