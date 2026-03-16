@@ -55,44 +55,57 @@ function getOtp(num) {
 
 
 module.exports.createRide = async ({
-    user, pickup, destination, vehicleType, vibe, bid
+    user, pickup, destination, pickupLat, pickupLng, destLat, destLng, vehicleType, vibe, bid
 }) => {
     if (!user || !pickup || !destination || !vehicleType) {
         throw new Error('All fields are required');
     }
 
-    const fareValues = await getFare(pickup, destination);
+    // Optimization: If coordinates are provided, format them as "lat, lng" string 
+    // to bypass Nominatim API in getFare -> getDistanceTime -> getAddressCoordinate
+    let pickupQuery = pickup;
+    let destQuery = destination;
+    
+    if (pickupLat && pickupLng && destLat && destLng) {
+        pickupQuery = `${pickupLat}, ${pickupLng}`;
+        destQuery = `${destLat}, ${destLng}`;
+    }
 
-    // Fetch coordinates
-    // We already do this inside getFare but getFare returns numbers.
-    // We need the coords for the DB model.
-    // Optimization: getFare calls getDistanceTime which calls getAddressCoordinate.
-    // We are calling it again here. Ideally refactor, but for now just call it.
-    const pickupCoordinates = await mapService.getAddressCoordinate(pickup);
-    const destinationCoordinates = await mapService.getAddressCoordinate(destination);
+    const fareValues = await getFare(pickupQuery, destQuery);
+
+    // Fetch coordinates (Bypass API if coordinates are already provided from frontend)
+    let pickupCoordinates = { ltd: pickupLat, lng: pickupLng };
+    let destinationCoordinates = { ltd: destLat, lng: destLng };
+
+    // Fallback if frontend didn't send coordinates
+    if (!pickupLat || !pickupLng) {
+        pickupCoordinates = await mapService.getAddressCoordinate(pickup);
+    }
+    if (!destLat || !destLng) {
+        destinationCoordinates = await mapService.getAddressCoordinate(destination);
+    }
 
     const ride = await rideModel.create({
         rider: user,
         pickup: {
             address: pickup,
-            coordinates: [pickupCoordinates.lng, pickupCoordinates.ltd] // GeoJSON format [lng, lat]
+            coordinates: [parseFloat(pickupCoordinates.lng), parseFloat(pickupCoordinates.ltd)] // GeoJSON format [lng, lat]
         },
         drop: {
             address: destination,
-            coordinates: [destinationCoordinates.lng, destinationCoordinates.ltd]
+            coordinates: [parseFloat(destinationCoordinates.lng), parseFloat(destinationCoordinates.ltd)]
         },
         otp: getOtp(6),
         fare: {
             initialBid: bid || fareValues[vehicleType]
         },
-        vibe: vibe, // Add vibe here
+        vibe: vibe,
         status: 'requested'
     })
 
     // Publish to RabbitMQ
     const rabbitMQ = require('./rabbitmq.service');
 
-    // We need to populate the user details for the frontend to display them
     const rideWithUser = await rideModel.findOne({ _id: ride._id }).populate('rider');
     console.log('Publishing ride to RabbitMQ:', JSON.stringify(rideWithUser, null, 2));
 
