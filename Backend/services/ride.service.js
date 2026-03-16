@@ -3,13 +3,21 @@ const mapService = require('./maps.service');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 
-async function getFare(pickup, destination) {
+async function getFare(pickup, destination, pickupLat, pickupLng, destLat, destLng) {
 
     if (!pickup || !destination) {
         throw new Error('Pickup and destination are required');
     }
 
-    const distanceTime = await mapService.getDistanceTime(pickup, destination);
+    let pickupQuery = pickup;
+    let destQuery = destination;
+
+    if (pickupLat && pickupLng && destLat && destLng) {
+        pickupQuery = `${pickupLat}, ${pickupLng}`;
+        destQuery = `${destLat}, ${destLng}`;
+    }
+
+    const distanceTime = await mapService.getDistanceTime(pickupQuery, destQuery);
 
     const baseFare = {
         auto: 30,
@@ -71,7 +79,7 @@ module.exports.createRide = async ({
         destQuery = `${destLat}, ${destLng}`;
     }
 
-    const fareValues = await getFare(pickupQuery, destQuery);
+    const fareValues = await getFare(pickup, destination, pickupLat, pickupLng, destLat, destLng);
 
     // Fetch coordinates (Bypass API if coordinates are already provided from frontend)
     let pickupCoordinates = { ltd: pickupLat, lng: pickupLng };

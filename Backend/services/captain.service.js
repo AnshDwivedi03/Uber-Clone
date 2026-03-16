@@ -94,7 +94,7 @@ module.exports.subscribeToRideRequests = async () => {
 
             captains.forEach(captain => {
                 if (captain.socketId) {
-                    console.log(`Sending new-ride to captain ${captain._id}. Payload user:`, rideData.user);
+                    console.log(`[Diagnostic] Sending new-ride to captain ${captain._id} (${captain.fullname.firstname}) via socket ${captain.socketId}`);
                     
                     // DEEP COPY and FLATTEN the object to match Frontend expectations
                     const rideForFrontend = {
@@ -118,9 +118,11 @@ module.exports.subscribeToRideRequests = async () => {
                         event: 'new-ride',
                         data: rideForFrontend
                     });
+                } else {
+                    console.warn(`[Diagnostic] Captain ${captain._id} is online but has no socketId recorded!`);
                 }
             });
-            console.log(`Notified ${captains.length} captains for ride ${rideData._id}`);
+            console.log(`[Diagnostic] Finished notifying ${captains.length} captains for ride ${rideData._id}`);
 
         } catch (error) {
             console.error('Error processing ride request:', error);

@@ -16,7 +16,6 @@ module.exports.createRide = async (req, res, next) => {
     require('fs').writeFileSync('debug_ride.log', JSON.stringify(req.body, null, 2) + '\n', { flag: 'a' });
 
     try {
-        // Pass coordinates down to the service to bypass geocoding
         const ride = await rideService.createRide({ 
             user: req.user._id, 
             pickup, 
@@ -48,10 +47,10 @@ module.exports.getFare = async (req, res, next) => {
         return res.status(400).json({ errors: errors.array() });
     }
 
-    const { pickup, destination } = req.query;
+    const { pickup, destination, pickupLat, pickupLng, destLat, destLng } = req.query;
 
     try {
-        const fare = await rideService.getFare(pickup, destination);
+        const fare = await rideService.getFare(pickup, destination, pickupLat, pickupLng, destLat, destLng);
         return res.status(200).json(fare);
     } catch (err) {
         if (err.message === 'Unable to fetch coordinates' || err.message === 'Unable to fetch distance and time') {

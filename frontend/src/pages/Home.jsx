@@ -31,6 +31,8 @@ const Home = () => {
     // Map Selection State
     const [mapSelectionMode, setMapSelectionMode] = useState(null); // 'pickup' | 'drop' | null
     const [tempMapCoords, setTempMapCoords] = useState(null);
+    const [pickupCoords, setPickupCoords] = useState(null);
+    const [dropCoords, setDropCoords] = useState(null);
 
     const { socket, joinIdentity } = useSocket();
     const { user } = useContext(UserDataContext);
@@ -74,6 +76,10 @@ const Home = () => {
             const response = await axios.post(`${import.meta.env.VITE_BASE_URL}/rides/create`, {
                 pickup,
                 destination: drop,
+                pickupLat: pickupCoords?.lat,
+                pickupLng: pickupCoords?.lng,
+                destLat: dropCoords?.lat,
+                destLng: dropCoords?.lng,
                 vehicleType,
                 vibe, 
                 bid: bidFare
@@ -98,7 +104,14 @@ const Home = () => {
 
         try {
             const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/rides/get-fare`, {
-                params: { pickup, destination: drop },
+                params: { 
+                    pickup, 
+                    destination: drop,
+                    pickupLat: pickupCoords?.lat,
+                    pickupLng: pickupCoords?.lng,
+                    destLat: dropCoords?.lat,
+                    destLng: dropCoords?.lng
+                },
                 headers: {
                     Authorization: `Bearer ${localStorage.getItem('token')}`
                 }
@@ -168,14 +181,21 @@ const Home = () => {
 
             if (mapSelectionMode === 'pickup') {
                 setPickup(response.data.address);
+                setPickupCoords(tempMapCoords);
             } else {
                 setDrop(response.data.address);
+                setDropCoords(tempMapCoords);
             }
         } catch (error) {
             console.error("RevGeo Error", error);
             // Fallback to coords string if address fails
-            if (mapSelectionMode === 'pickup') setPickup(`${tempMapCoords.lat}, ${tempMapCoords.lng}`);
-            else setDrop(`${tempMapCoords.lat}, ${tempMapCoords.lng}`);
+            if (mapSelectionMode === 'pickup') {
+                setPickup(`${tempMapCoords.lat}, ${tempMapCoords.lng}`);
+                setPickupCoords(tempMapCoords);
+            } else {
+                setDrop(`${tempMapCoords.lat}, ${tempMapCoords.lng}`);
+                setDropCoords(tempMapCoords);
+            }
         }
     };
 
@@ -192,9 +212,11 @@ const Home = () => {
                             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
                         });
                         setPickup(response.data.address);
+                        setPickupCoords({ lat: latitude, lng: longitude });
                     } catch (error) {
                         console.error("Auto-Location Error", error);
                         setPickup(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+                        setPickupCoords({ lat: latitude, lng: longitude });
                     }
                 },
                 (error) => console.error('Error getting location:', error)
